@@ -1,0 +1,16 @@
+{
+  "name": "poc-node-dapp",
+  "version": "0.1.0",
+  "description": "POC of a blockchain dapp",
+  "main": "src/main.mjs",
+  "scripts": {
+    "test": "echo lol",
+    "start": "node --experimental-modules src/main.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "tba"
+  },
+  "author": "Maxime Lewandowski <lywela@gmail.com>",
+  "license": "ISC"
+}
