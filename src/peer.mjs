@@ -105,8 +105,9 @@ export class Peer {
 
         console.log('Verifying block...')
         const { votes, peers } = await this.endpoint.broadcastBlock(block)
+        console.log(votes)
 
-        let trueCount = votes.reduce((a, b) => a + b, 0)
+        let trueCount = votes.reduce((a, b) => a + b, 0) + 1
 
         if (trueCount >= Math.floor((2 / 3) * peers + 1)) {
             console.log('⛏️  Block verified', block.data)

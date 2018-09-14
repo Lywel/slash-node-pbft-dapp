@@ -68,24 +68,47 @@ export class Endpoint {
       console.log('disconnected from masterNode');
     }
     this.masterNode.onmessage = (evt) => {
-      console.log(`masterNode said '${evt.data}'`)
+      const msg = JSON.parse(evt.data)
+      if (msg.type == 'block') {
+        console.log('block verification:', msg.data)
+        this.bci.checkBlock(msg.data)
+        this.masterNode.send(JSON.stringify({ type: 'validation', data: true }))
+      }
     }
   }
 
   async contactMasterNode(tx) {
-    if (this.masterNode && this.masterNode.readyState == this.masterNode.OPEN) {
-      this.masterNode.send(JSON.stringify({
-        type: 'tx',
-        data: tx
-      }))
-
-    } else
+    if (this.masterNode && this.masterNode.readyState == this.masterNode.OPEN)
+      this.masterNode.send(JSON.stringify({ type: 'tx', data: tx }))
+    else
       console.log('transfer to masterNode failed')
   }
 
   async broadcastBlock(block) {
-    console.log('Will broadcast the block and ask for verification')
-    return [true]
+    console.log(this.app.ws.server.clients.size, 'peers connected')
+    const peers = Array.from(this.app.ws.server.clients)
+
+    if (peers.length) {
+      await Promise.all(peers.map(
+        async peer => await peer.send(JSON.stringify({ type: 'block', data: block}))
+      ))
+    }
+
+    this.voting = {
+      start: Date.now(),
+      peers: peers.length + 1,
+      votes: []
+    }
+
+    return new Promise((res, rej) => {
+      const checkVoting = () => {
+        if (Date.now() - this.voting.start > 1000
+          || this.voting.votes.length === this.voting.peers)
+          return res(this.voting)
+        setTimeout(checkVoting, 10);
+      }
+      checkVoting()
+    })
   }
 
   // Routes handlers
@@ -143,19 +166,11 @@ export class Endpoint {
         case 'tx':
           this.bci.addTx(msg.data)
           break
-        case 'block':
-          console.log('block verification:', msg.data)
-          ctx.websocket.send(({ type: 'validation', data: true }).toString())
+        case 'validation':
+          this.voting.votes.push(msg.data)
           break
         }
       }
-/*
-      // broadcast the msg
-      const clients = ctx.app.ws.server.clients
-      clients.forEach(client => {
-        client.send(`[ ${ctx.websocket.id} ]: ${msg}`)
-      })
-*/
     })
   }
 }
