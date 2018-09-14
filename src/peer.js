@@ -1,9 +1,9 @@
 import Endpoint from './endpoint'
 
 export class Peer {
-    constructor(blockchain, txStack) {
-        this.blockchain = blockchain
-        this.txStack = txStack
+    constructor() {
+        this.blockchain = new Blockchain()
+        this.txStack = []
         this.endpoint = new Endpoint()
         this.endpoint.bci.getBlocks = async () => {
             return this.blockchain.chain

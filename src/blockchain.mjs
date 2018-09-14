@@ -33,7 +33,7 @@ export class Blockchain {
   }
 
   genesisBlock() {
-    return new Block(0, 'Genesis Block', 0, Date.now())
+    return new Block(0, [], 0, Date.now())
   }
 
   lastBlock() {
