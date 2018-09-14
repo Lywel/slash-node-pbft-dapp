@@ -77,7 +77,7 @@ export class Peer {
 
     checkBlock(blockToCheck) {
         let transactionList = this.computeBalances()
-
+        let isValid = true
         blockToCheck.data.forEach(tx => {
             if (tx.valid === false)
                 return
