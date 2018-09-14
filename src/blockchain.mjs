@@ -17,6 +17,14 @@ export class Block {
       .update(this.index + this.prevHash + this.data + this.timestamp)
       .digest('hex')
   }
+
+  equals(block) {
+    return JSON.stringify(this) === JSON.stringify(block)
+  }
+
+  toString() {
+    return JSON.stringify(this)
+  }
 }
 
 export class Blockchain {
@@ -39,6 +47,7 @@ export class Blockchain {
       this.lastBlock().hash,
       Date.now())
     this.chain.push(block)
+    return this
   }
 
   isValid() {
@@ -49,7 +58,14 @@ export class Blockchain {
       if (cur.hash !== cur.computeHash() || cur.prevHash !== prev.hash)
         return false
     }
-
     return true
+  }
+
+  replaceChain(blockchain) {
+    if (blockchain.chain[0].equals(this.chain[0])
+      && blockchain.isValid()
+      && blockchain.chain.length > this.chain.length) {
+      this.chain = blockchain.chain
+    }
   }
 }
