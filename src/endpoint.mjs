@@ -5,7 +5,7 @@ import bodyParser from 'koa-bodyparser'
 import socketify from 'koa-websocket'
 import json from 'koa-json'
 
-class Endpoint {
+export class Endpoint {
   constructor() {
     this.port = process.env.PORT || 3000
     this.app = new Koa()
@@ -58,18 +58,17 @@ class Endpoint {
   }
 
   async addTx(ctx) {
-    console.dir(this, {depth: 1, color: true})
     if (this.bci.addTx) {
       // Check missing props
       const txProps = ['from', 'to', 'amount', 'msg']
-      const missingProps = txProps.filter(prop => !(prop in ctx.req.body))
+      const missingProps = txProps.filter(prop => !(prop in ctx.request.body))
       if (missingProps.length > 0) {
         ctx.status = 400
-        ctx.body = { error: `mandatory parameter '${prop}' is missing` }
+        ctx.body = { error: `mandatory parameter${missingProps.length > 1 ? 's' : ''} '${missingProps}' is missing` }
       } else {
 
         const cleanedTx = txProps
-          .reduce((tx, prop) => ({ ...tx, [prop]: ctx.req.body[prop] }), {})
+          .reduce((tx, prop) => ({ ...tx, [prop]: ctx.request.body[prop] }), {})
 
         await this.bci.addTx(cleanedTx)
         ctx.status = 200
@@ -104,6 +103,3 @@ class Endpoint {
     })
   }
 }
-
-const ep = new Endpoint()
-ep.start()
