@@ -3,10 +3,9 @@ import crypto from 'crypto'
 const crypto_secret = process.env.CRYPTO_SECRET || Math.random().toString()
 
 export class Block {
-  constructor(data, index = this.chain.length, prevHash = this.lastBlock().hash
-  , timestamp = date.now()) {
-    this.data = data
+  constructor(index, data, prevHash, timestamp) {
     this.index = index
+    this.data = data
     this.prevHash = prevHash
     this.timestamp = timestamp
     this.hash = this.computeHash()
@@ -34,7 +33,7 @@ export class Blockchain {
   }
 
   genesisBlock() {
-    return new Block([], 0, 0, Date.now())
+    return new Block(0, [], 0, Date.now())
   }
 
   lastBlock() {
@@ -43,8 +42,8 @@ export class Blockchain {
 
   addBlock(data) {
     let block = new Block(
-      data,
       this.chain.length,
+      data,
       this.lastBlock().hash,
       Date.now())
     this.chain.push(block)

@@ -55,7 +55,10 @@ export class Peer {
             else
                 resData.push({ ...tx, ok: false })
         })
-        return new Block(resData);
+        return new Block(this.blockchain.chain.length,
+            resData,
+            this.blockchain.lastBlock().hash,
+            Date.now());
     }
 
     checkBlock(blockToCheck) {
