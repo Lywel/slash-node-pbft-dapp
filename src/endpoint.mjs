@@ -81,7 +81,10 @@ export class Endpoint {
 
     } else
       console.log('transfer to masterNode failed')
+  }
 
+  async broadcastBlock(block) {
+    console.log('Will broadcast the block and ask for verification')
   }
 
   // Routes handlers
