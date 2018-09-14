@@ -35,8 +35,8 @@ export class Endpoint {
       .use(this.httpRouter.routes())
 
     this.app.ws
-      .use(logger())
-      .use(this.socketHandler)
+      .use(json())
+      .use(async ctx => await this.socketHandler(ctx))
   }
 
   async start() {
@@ -85,6 +85,7 @@ export class Endpoint {
 
   async broadcastBlock(block) {
     console.log('Will broadcast the block and ask for verification')
+    return [true]
   }
 
   // Routes handlers
@@ -133,14 +134,28 @@ export class Endpoint {
     console.log('socket[%s] connection', ctx.websocket.id)
 
     // Socket on message
-    ctx.websocket.on('message', async msg => {
-      console.log('socket[%s]: %s', ctx.websocket.id, msg)
+    ctx.websocket.on('message', async data => {
+      console.log('peer[%s] %s', ctx.websocket.id, data)
 
+      const msg = JSON.parse(data)
+      if (msg.type && msg.data) {
+        switch (msg.type) {
+        case 'tx':
+          this.bci.addTx(msg.data)
+          break
+        case 'block':
+          console.log('block verification:', msg.data)
+          ctx.websocket.send(({ type: 'validation', data: true }).toString())
+          break
+        }
+      }
+/*
       // broadcast the msg
       const clients = ctx.app.ws.server.clients
       clients.forEach(client => {
         client.send(`[ ${ctx.websocket.id} ]: ${msg}`)
       })
+*/
     })
   }
 }

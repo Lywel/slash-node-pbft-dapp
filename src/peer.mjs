@@ -17,7 +17,7 @@ export class Peer {
                 this.txStack.push(tx)
                 console.log('💸 transaction stacked', tx)
             } else {
-                console.log('contact master node', tx)
+                console.log('transfering to masterNode', tx)
                 this.endpoint.contactMasterNode(tx)
             }
         }
@@ -91,18 +91,20 @@ export class Peer {
     }
 
 
-    mine() {
-        const data = this.createBlock()
+    async mine() {
+        const block = this.createBlock()
         this.txStack = []
-        console.log('broadcast block to peers...')
+
+        console.log('Verifying block...')
         const res = await this.endpoint.broadcastBlock(block)
-        let trueCount = res.reduce((acc, cur) => acc + cur, 0)
+
+        let trueCount = res.reduce((acc, cur) => acc + cur, 0) + 1
+
         if (trueCount >= Math.floor((2 / 3) * res.length + 1)) {
-            console.log('⛏️  block mined', data)
-            this.blockchain.push(data)
-        } else {
-            console.log('invalid block :(', data)
-        }
+            console.log('⛏️  Block verified', block.data)
+            this.blockchain.chain.push(block)
+        } else
+            console.log('❌ Block invalid', block.data)
     }
 
     startMining() {
