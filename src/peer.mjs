@@ -104,7 +104,7 @@ export class Peer {
         const data = this.createBlock()
         this.txStack = []
         console.log('broadcast block to peers...')
-        let res = broadcastBlock(block)
+        const res = await this.endpoint.broadcastBlock(block)
         let trueCount = res.reduce((acc, cur) => acc + cur, 0)
         if (trueCount >= Math.floor((2 / 3) * res.length + 1)) {
             console.log('⛏️  block mined', data)
