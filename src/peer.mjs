@@ -26,7 +26,7 @@ export class Peer {
             this.startMining()
     }
 
-    createBlock() {
+    computeBalances() {
         let transactionList = {}
         transactionList["root"] = 100
 
@@ -42,6 +42,12 @@ export class Peer {
                 transactionList[tx.to] += tx.amount
             })
         })
+
+        return transactionList
+    }
+
+    createBlock() {
+        let transactionList = this.computeBalances()
 
         let resData = []
         this.txStack.forEach(tx => {
@@ -62,23 +68,8 @@ export class Peer {
     }
 
     checkBlock(blockToCheck) {
-        let transactionList = {}
-        transactionList["root"] = 100
+        let transactionList = this.computeBalances()
 
-        let isValid = true
-
-        this.blockchain.chain.forEach(block => {
-            block.data.forEach(tx => {
-                if (tx.valid === false)
-                    return
-
-                transactionList[tx.from] = transactionList[tx.from] || 0
-                transactionList[tx.to] = transactionList[tx.to] || 0
-
-                transactionList[tx.from] -= tx.amount
-                transactionList[tx.to] += tx.amount
-            })
-        })
         blockToCheck.data.forEach(tx => {
             if (tx.valid === false)
                 return
