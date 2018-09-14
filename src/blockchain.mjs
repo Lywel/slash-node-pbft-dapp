@@ -50,10 +50,10 @@ export class Blockchain {
     return this
   }
 
-  isValid() {
-    for (let i = 1; i < this.chain.length; ++i) {
-      const cur = this.chain[i]
-      const prev = this.chain[i - 1]
+  static isValid(chain) {
+    for (let i = 1; i < chain.length; ++i) {
+      const cur = chain[i]
+      const prev = chain[i - 1]
 
       if (cur.hash !== cur.computeHash() || cur.prevHash !== prev.hash)
         return false
@@ -61,11 +61,11 @@ export class Blockchain {
     return true
   }
 
-  replaceChain(blockchain) {
-    if (blockchain.chain[0].equals(this.chain[0])
-      && blockchain.isValid()
-      && blockchain.chain.length > this.chain.length) {
-      this.chain = blockchain.chain
+  replaceChain(chain) {
+    if (chain[0].equals(this.chain[0])
+      && Blockchain.isValid(chain)
+      && chain.length > this.chain.length) {
+      this.chain = chain
     }
   }
 }

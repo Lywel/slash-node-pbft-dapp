@@ -9,6 +9,8 @@ import getPort from 'get-port'
 import websocket from 'websocket'
 import knownPeers from './known-peers'
 
+import { Block } from './blockchain'
+
 const W3CWebSocket = websocket.w3cwebsocket;
 
 export class Endpoint {
@@ -73,6 +75,22 @@ export class Endpoint {
         console.log('block verification:', msg.data)
         this.bci.checkBlock(msg.data)
         this.masterNode.send(JSON.stringify({ type: 'validation', data: true }))
+      } else if (msg.type == 'newchain') {
+        console.log('blockchain set', msg.data)
+        this.bci.setBlockchain(
+          msg.data.map(b => {
+           let nb = new Block(b.index, b.data, b.prevHash, b.timestamp)
+           nb.hash = b.hash
+           return nb
+          }))
+      } else if (msg.type == 'blockchain') {
+        console.log('blockchain update', msg.data)
+        this.bci.replaceBlockchain(
+          msg.data.map(b => {
+           let nb = new Block(b.index, b.data, b.prevHash, b.timestamp)
+           nb.hash = b.hash
+           return nb
+          }))
       }
     }
   }
@@ -88,6 +106,17 @@ export class Endpoint {
     console.log(this.app.ws.server.clients.size, 'peers connected')
     const peers = Array.from(this.app.ws.server.clients)
 
+    // Share the blockchain
+    if (peers.length) {
+      await Promise.all(peers.map(async peer => {
+        peer.send(JSON.stringify({
+          type: 'blockchain',
+          data: await this.bci.getBlocks()
+        }))
+      }))
+    }
+
+    // Share the new block
     if (peers.length) {
       await Promise.all(peers.map(
         async peer => await peer.send(JSON.stringify({ type: 'block', data: block}))
@@ -155,6 +184,9 @@ export class Endpoint {
   async socketHandler(ctx, next) {
     ctx.websocket.id = ctx.req.headers['sec-websocket-key'].substr(0, 4)
     console.log('socket[%s] connection', ctx.websocket.id)
+
+    const chain = await this.bci.getBlocks()
+    ctx.websocket.send(JSON.stringify({ type: 'newchain', data: chain }))
 
     // Socket on message
     ctx.websocket.on('message', async data => {

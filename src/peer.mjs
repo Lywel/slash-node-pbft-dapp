@@ -11,7 +11,10 @@ export class Peer {
             return this.blockchain.chain
         }
         this.endpoint.bci.setBlockchain = (blockchain) => {
-            this.blockchain = blockchain
+            this.blockchain.chain = blockchain
+        }
+        this.endpoint.bci.replaceBlockchain = (blockchain) => {
+            this.blockchain.replaceChain(blockchain)
         }
 
         this.endpoint.bci.checkBlock = (block) => {
