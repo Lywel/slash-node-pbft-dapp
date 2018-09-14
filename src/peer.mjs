@@ -10,9 +10,14 @@ export class Peer {
         this.endpoint.bci.getBlocks = async () => {
             return this.blockchain.chain
         }
-        this.endpoint.setBlockchain = (blockchain) => {
+        this.endpoint.bci.setBlockchain = (blockchain) => {
             this.blockchain = blockchain
         }
+
+        this.endpoint.bci.checkBlock = (block) => {
+            return this.checkBlock(block)
+        }
+
         this.endpoint.bci.addTx = async (tx) => {
             console.log('transaction received')
 
