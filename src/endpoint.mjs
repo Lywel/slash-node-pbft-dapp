@@ -5,14 +5,18 @@ import bodyParser from 'koa-bodyparser'
 import socketify from 'koa-websocket'
 import json from 'koa-json'
 
+import getPort from 'get-port'
+import websocket from 'websocket'
+import knownPeers from './known-peers'
+
+const W3CWebSocket = websocket.w3cwebsocket;
+
 export class Endpoint {
   constructor() {
-    this.port = process.env.PORT || 3000
     this.app = new Koa()
     socketify(this.app)
     this.httpRouter = new Router()
     this.wsRouter = new Router()
-
 
     // Blockchain getter interface
     this.bci = {
@@ -35,9 +39,14 @@ export class Endpoint {
       .use(this.socketHandler)
   }
 
-  start() {
+  async start() {
+    this.port = process.env.PORT
+      || await getPort({port: [3000, 3001, 3002, 3003, 3004, 3005, 3006]})
+
     this.server = this.app.listen(this.port, () => {
       console.log('Server started on port %d', this.port)
+      if (!process.env.MASTER)
+        this.peerDiscovery()
     })
   }
 
@@ -45,6 +54,35 @@ export class Endpoint {
     this.server.close(console.log('Shutting down server'))
   }
 
+  peerDiscovery() {
+    console.log('starting peer discovery...')
+    this.masterNode = new W3CWebSocket('ws://' + knownPeers[0])
+
+    this.masterNode.onerror = () => {
+      console.log('unable to connect to masterNode ' + knownPeers[0])
+    }
+    this.masterNode.onopen = () => {
+      console.log('connected to the masterNode');
+    }
+    this.masterNode.onclose = () => {
+      console.log('disconnected from masterNode');
+    }
+    this.masterNode.onmessage = (evt) => {
+      console.log(`masterNode said '${evt.data}'`)
+    }
+  }
+
+  async contactMasterNode(tx) {
+    if (this.masterNode && this.masterNode.readyState == this.masterNode.OPEN) {
+      this.masterNode.send(JSON.stringify({
+        type: 'tx',
+        data: tx
+      }))
+
+    } else
+      console.log('transfer to masterNode failed')
+
+  }
 
   // Routes handlers
   async getBlocks(ctx) {

@@ -14,11 +14,13 @@
   "author": "Maxime Lewandowski <lywela@gmail.com>",
   "license": "ISC",
   "dependencies": {
+    "get-port": "^4.0.0",
     "koa": "^2.5.3",
     "koa-bodyparser": "^4.2.1",
     "koa-json": "^2.0.2",
     "koa-logger": "^3.2.0",
     "koa-router": "^7.4.0",
-    "koa-websocket": "^5.0.1"
+    "koa-websocket": "^5.0.1",
+    "websocket": "^1.0.26"
   }
 }
