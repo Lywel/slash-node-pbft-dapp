@@ -10,6 +10,9 @@ export class Peer {
         this.endpoint.bci.getBlocks = async () => {
             return this.blockchain.chain
         }
+        this.endpoint.setBlockchain = (blockchain) => {
+            this.blockchain = blockchain
+        }
         this.endpoint.bci.addTx = async (tx) => {
             console.log('transaction received')
 
@@ -96,13 +99,14 @@ export class Peer {
         this.txStack = []
 
         console.log('Verifying block...')
-        const res = await this.endpoint.broadcastBlock(block)
+        const { votes, peers } = await this.endpoint.broadcastBlock(block)
 
-        let trueCount = res.reduce((acc, cur) => acc + cur, 0) + 1
+        let trueCount = votes.reduce((a, b) => a + b, 0)
 
-        if (trueCount >= Math.floor((2 / 3) * res.length + 1)) {
+        if (trueCount >= Math.floor((2 / 3) * peers + 1)) {
             console.log('⛏️  Block verified', block.data)
             this.blockchain.chain.push(block)
+            // broadcast blockchain
         } else
             console.log('❌ Block invalid', block.data)
     }
