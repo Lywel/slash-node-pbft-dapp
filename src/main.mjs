@@ -1,4 +1,6 @@
-import { Peer } from './peer'
+import { NetworkNode } from './endpoint'
 
-const peer = new Peer()
+const node = new NetworkNode()
+
+node.start()
 

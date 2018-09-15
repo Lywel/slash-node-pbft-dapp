@@ -1,132 +1,139 @@
-import { Endpoint } from './endpoint'
+import Axios from 'axios'
+import EventEmitter from 'events'
+
 import { Blockchain } from './blockchain'
 import { Block } from './blockchain.mjs';
+import knownPeers from './known-peers'
 
-export class Peer {
+export class Peer extends EventEmitter {
   constructor() {
+    super()
     this.blockchain = new Blockchain()
-      this.txStack = []
-      this.endpoint = new Endpoint()
-      this.endpoint.bci.getBlocks = async () => {
-        return this.blockchain.chain
-      }
-    this.endpoint.bci.setBlockchain = (blockchain) => {
-      this.blockchain.chain = blockchain
-    }
-    this.endpoint.bci.replaceBlockchain = (blockchain) => {
-      this.blockchain.replaceChain(blockchain)
-    }
+    this.pendingTx = []
+  }
 
-    this.endpoint.bci.checkBlock = (block) => {
-      return this.checkBlock(block)
-    }
+  async registerTx(tx) {
+    console.log('[Peer] tx received')
 
-    this.endpoint.bci.addTx = async (tx) => {
-      console.log('transaction received')
-
-        if (process.env.MASTER) {
-          this.txStack.push(tx)
-            console.log('💸 transaction stacked', tx)
-        } else {
-          console.log('transfering to masterNode', tx)
-            this.endpoint.contactMasterNode(tx)
-        }
+    if (process.env.MASTER) {
+      this.pendingTx.push(tx)
+      console.log('[Peer] 💸 tx registered', tx)
+    } else {
+      await Axios.post(`http://${KnownPeers[0]}/tx`, tx)
+      console.log('[Peer] tx transfered', tx)
     }
-    this.endpoint.start()
-      if (process.env.MASTER)
-        this.startMining()
   }
 
   computeBalances() {
     let transactionList = {}
     transactionList["root"] = 100
 
-      this.blockchain.chain.forEach(block => {
-          block.data.forEach(tx => {
-              if (tx.valid === false)
-              return
+    this.blockchain.chain.forEach(block => {
+      block.data.forEach(tx => {
+        if (tx.valid === false)
+          return
 
-              transactionList[tx.from] = transactionList[tx.from] || 0
-              transactionList[tx.to] = transactionList[tx.to] || 0
+        transactionList[tx.from] = transactionList[tx.from] || 0
+        transactionList[tx.to] = transactionList[tx.to] || 0
 
-              transactionList[tx.from] -= tx.amount
-              transactionList[tx.to] += tx.amount
-              })
-          })
+        transactionList[tx.from] -= tx.amount
+        transactionList[tx.to] += tx.amount
+      })
+    })
 
     return transactionList
   }
 
-  createBlock() {
+  buildNextBlock() {
     let transactionList = this.computeBalances()
+    let resData = []
 
-      let resData = []
-      this.txStack.forEach(tx => {
-          transactionList[tx.to] = transactionList[tx.to] || 0
-          transactionList[tx.from] = transactionList[tx.from] || 0
-          if (transactionList[tx.from] - tx.amount >= 0) {
-          resData.push({ ...tx, ok: true })
-          transactionList[tx.to] += tx.amount
-          transactionList[tx.from] -= tx.amount
-          }
-          else
-          resData.push({ ...tx, ok: false })
-          })
-    return new Block(this.blockchain.chain.length,
-        resData,
-        this.blockchain.lastBlock().hash,
-        Date.now());
+    this.pendingTx.forEach(tx => {
+      transactionList[tx.to] = transactionList[tx.to] || 0
+      transactionList[tx.from] = transactionList[tx.from] || 0
+      if (transactionList[tx.from] - tx.amount >= 0) {
+        resData.push({ ...tx, ok: true })
+        transactionList[tx.to] += tx.amount
+        transactionList[tx.from] -= tx.amount
+      }
+      else
+        resData.push({ ...tx, ok: false })
+    })
+
+    // Clear registered transactions
+    this.pendingTx = []
+
+    return new Block(
+      this.blockchain.chain.length,
+      resData,
+      this.blockchain.lastBlock().hash,
+      Date.now()
+    )
   }
 
   checkBlock(blockToCheck) {
     let transactionList = this.computeBalances()
-      let isValid = true
+    let isValid = true
 
-      // verify hash of previous block
+    // TODO: verify hash of previous block
 
-      blockToCheck.data.forEach(tx => {
-          if (tx.valid === false ) {
-          if (transactionList[tx.from] - tx.amount >= 0)
+    blockToCheck.data.forEach(tx => {
+      if (tx.valid === false ) {
+        if (transactionList[tx.from] - tx.amount >= 0)
           isValid = false
-          return
-          }
+        return
+      }
 
-          if (transactionList[tx.from] - tx.amount < 0) {
-          isValid = false
-          return
-          }
+      if (transactionList[tx.from] - tx.amount < 0) {
+        isValid = false
+        return
+      }
 
-          transactionList[tx.from] = transactionList[tx.from] || 0
-          transactionList[tx.to] = transactionList[tx.to] || 0
+      transactionList[tx.from] = transactionList[tx.from] || 0
+      transactionList[tx.to] = transactionList[tx.to] || 0
 
-          transactionList[tx.from] -= tx.amount
-          transactionList[tx.to] += tx.amount
-          })
+      transactionList[tx.from] -= tx.amount
+      transactionList[tx.to] += tx.amount
+    })
 
     return isValid
-
   }
 
+  signBlock(sign) {
+    console.log('[Peer] received signature from', sign.emitter)
+    if (this.pendingBlock) {
+      this.pendingBlock.signatures.push(sign.emitter)
 
-  async mine() {
-    const block = this.createBlock()
-      this.txStack = []
+      if (this.pendingBlock.signatures.length > this.pendingBlock.signAmount) {
+        console.log('[Peer] ⛏️  block verified\n', this.pendingBlock)
+        this.blockchain.chain.push(this.pendingBlock)
+        this.pendingBlock = null
+      }
+    } else {
+      console.error('[Peer] but there is no pending blocks')
+    }
+  }
 
-      console.log('Verifying block...')
-      const { votes, peers } = await this.endpoint.broadcastBlock(block)
-      console.log(votes)
+  mine() {
+    this.pendingBlock = this.buildNextBlock()
 
-      let trueCount = votes.reduce((a, b) => a + b, 0) + 1
+    this.emit('block', this.pendingBlock, (amount) => {
+      console.log(`[Peer] waiting for ${amount} signatures`)
+      this.pendingBlock.signAmount = amount
+    })
 
-      if (trueCount >= Math.floor((2 / 3) * peers + 1)) {
-        console.log('⛏️  Block verified', block.data)
-          this.blockchain.chain.push(block)
-          // broadcast blockchain
-      } else
-        console.log('❌ Block invalid', block.data)
+    setTimeout(() => {
+      if (this.pendingBlock) {
+        console.log('[Peer] ❌ block invalid\n', this.pendingBlock)
+        this.pendingBlock = null
+      }
+    }, 1000)
+
+    this.signBlock({emitter: 'MasterPeer'})
   }
 
   startMining() {
+    console.trace('=============== START MINNING ==================')
     this.minerPid = setInterval(() => this.mine(), 3000)
   }
 

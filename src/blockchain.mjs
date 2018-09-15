@@ -9,6 +9,7 @@ export class Block {
     this.prevHash = prevHash
     this.timestamp = timestamp
     this.hash = this.computeHash()
+    this.signatures = []
   }
 
   computeHash() {
@@ -24,6 +25,12 @@ export class Block {
 
   toString() {
     return JSON.stringify(this)
+  }
+
+  static fromJSON(json) {
+    let block = new Block(json.index, json.data, json.prevHash, json.timestamp)
+    block.hash = json.hash
+    return block
   }
 }
 
@@ -47,10 +54,9 @@ export class Blockchain {
       this.lastBlock().hash,
       Date.now())
     this.chain.push(block)
-    return this
   }
 
-  static isValid(chain) {
+  isValid(chain) {
     for (let i = 1; i < chain.length; ++i) {
       const cur = chain[i]
       const prev = chain[i - 1]
@@ -63,7 +69,7 @@ export class Blockchain {
 
   replaceChain(chain) {
     if (chain[0].equals(this.chain[0])
-      && Blockchain.isValid(chain)
+      && this.isValid(chain)
       && chain.length > this.chain.length) {
       this.chain = chain
     }
