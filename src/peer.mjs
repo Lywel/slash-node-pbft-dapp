@@ -133,7 +133,6 @@ export class Peer extends EventEmitter {
   }
 
   startMining() {
-    console.trace('=============== START MINNING ==================')
     this.minerPid = setInterval(() => this.mine(), 3000)
   }
 

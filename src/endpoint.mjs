@@ -2,8 +2,8 @@ import Koa from 'koa'
 import Router from 'koa-router'
 import logger from 'koa-logger'
 import bodyParser from 'koa-bodyparser'
-import socketify from 'koa-websocket'
 import json from 'koa-json'
+import socketify from 'koa-websocket'
 
 import getPort from 'get-port'
 import websocket from 'websocket'
@@ -18,7 +18,7 @@ const W3CWebSocket = websocket.w3cwebsocket;
 export class NetworkNode extends EventEmitter {
   constructor() {
     super()
-    // Server setup
+    // HTTP Server setup
     this.app = new Koa()
     socketify(this.app)
 
@@ -28,15 +28,29 @@ export class NetworkNode extends EventEmitter {
       .use(bodyParser())
       .use(this.httpRouter().routes())
 
+    // Websocket p2p server setup
     this.app.ws
-      .use(json())
       .use(async ctx => await this.socketHandler(ctx))
 
+    this.peers = []
     this.peer = new Peer()
     this.peer.on('block', (block, setRequiredSignatures) => {
-      let signNb = 2 / 3 * ((this.app.ws.server.clients.size || 0) + 1)
+      // Compute required signature numer
+      const networkSize = this.app.ws.server.clients.size
+        + Object.keys(this.peers).length
+      const signNb = 2 / 3 * (networkSize) + 1
+
       setRequiredSignatures(signNb)
-      this.broadcastBlock(block)
+
+      this.broadcast({
+        type: 'blockchain',
+        data: this.peer.blockchain.chain
+      })
+
+      this.broadcast({
+        type: 'block',
+        data: block
+      })
     })
   }
 
@@ -47,11 +61,9 @@ export class NetworkNode extends EventEmitter {
 
     this.server = this.app.listen(this.port, () => {
       console.log('[NetworkNode] started on port %d', this.port)
-      if (!process.env.MASTER) {
-        this.peerDiscovery()
-      } else {
+      this.peerDiscovery()
+      if (process.env.MASTER)
         this.peer.startMining()
-      }
     })
   }
 
@@ -78,90 +90,122 @@ export class NetworkNode extends EventEmitter {
 
   // Find the other nodes of the network
   peerDiscovery() {
-    this.masterNode = new W3CWebSocket('ws://' + knownPeers[0])
+    const createSocket = (address) => {
+      // Dont connect to yourself
+      if (address === `localhost:${this.port}`)
+        return
 
-    this.masterNode.onmessage = (evt) => {
-      const msg = JSON.parse(evt.data)
-      if (msg.type == 'block') {
-        // Receied block for validation
-        this.peer.checkBlock(msg.data)
-        this.masterNode.send(JSON.stringify({ type: 'validation', data: true }))
-      } else if (msg.type == 'newchain') {
-        // Replace local chain with a new one
-        console.log('[NetworkNode] blockchain synced', msg.data)
-        this.peer.blockchain.chain = msg.data.map(b => {
-          let nb = new Block(b.index, b.data, b.prevHash, b.timestamp)
-          nb.hash = b.hash
-          return nb
-        })
-      } else if (msg.type == 'blockchain') {
-        // Compare chain and eventually replace it
-        console.log('[NetworkNode] blockchain replace')
-        this.peer.blockchain.replaceChain(msg.data.map(b => {
-          let nb = new Block(b.index, b.data, b.prevHash, b.timestamp)
-          nb.hash = b.hash
-          return nb
-        }))
+      let ws = new W3CWebSocket(`ws://${address}`)
+
+      ws.onmessage = (evt) => {
+        try {
+          const msg = JSON.parse(evt.data)
+          this.handlePeerMsg(ws, msg)
+        } catch (err) {
+          console.error(`[NetworkNode][${ws.url}] invalid msg`)
+        }
+      }
+
+      ws.onerror = () => {
+        console.error(`[NetworkNode][${ws.url}] connection failed`)
+      }
+
+      ws.onopen = () => {
+        console.log(`[NetworkNode][${ws.url}] connection opened`)
+        this.peers[ws.url] = ws
+      }
+
+      ws.onclose = () => {
+        console.error(`[NetworkNode][${ws.url}] connection closed`)
+        delete this.peers[ws.url]
       }
     }
+
+    knownPeers.forEach(createSocket)
   }
 
-  async contactMasterNode(tx) {
-    if (this.masterNode && this.masterNode.readyState == this.masterNode.OPEN)
-      this.masterNode.send(JSON.stringify({ type: 'tx', data: tx }))
-    else
-      console.log('[NetworkNode] transfer to masterNode failed')
-  }
+  handlePeerMsg(ws, msg) {
+    console.log(`[NetworkNode][${ws.url || ws.id}] sent a '${msg.type}' msg`)
 
-  async broadcastBlock(block) {
-    console.log(`[NetworkNode] broadcasting block to ${this.app.ws.server.clients.size} peers`)
+    switch (msg.type) {
+    case 'block':
+      // Receied block for validation
+      this.peer.checkBlock(msg.data)
+      this.broadcast({
+        type: 'validation',
+        data: true,
+        id: msg.data.index
+      })
+      break
 
-    const peers = Array.from(this.app.ws.server.clients)
+    case 'newchain':
+      // Replace local chain with a new one
+      this.peer.blockchain.chain = msg.data.map(b => {
+        let nb = new Block(b.index, b.data, b.prevHash, b.timestamp)
+        nb.hash = b.hash
+        return nb
+      })
+      break
 
-    // Share the current blockchain
-    if (peers.length) {
-      await Promise.all(peers.map(async peer => {
-        peer.send(JSON.stringify({
-          type: 'blockchain',
-          data: this.peer.blockchain.chain
-        }))
+    case 'blockchain':
+      // Compare chain and eventually replace it
+      this.peer.blockchain.replaceChain(msg.data.map(b => {
+        let nb = new Block(b.index, b.data, b.prevHash, b.timestamp)
+        nb.hash = b.hash
+        return nb
       }))
+      break
+
+    // Master node
+    case 'tx':
+      this.peer.registerTx(msg.data)
+      break
+    case 'validation':
+      this.peer.signBlock({ emitter: (ws.url || ws.id) })
+      break
+    }
+  }
+
+  broadcast(data) {
+    console.log(`[NetworkNode] broadcasting ${data.type} to ${
+      this.app.ws.server.clients.size + Object.keys(this.peers).length} peers`)
+
+    const bytes = JSON.stringify(data)
+
+    // Broadcast as a client
+    for (let [address, peer] of Object.entries(this.peers)) {
+      if (peer.readyState == peer.OPEN) {
+        peer.send(bytes)
+      }
     }
 
-    // Share the new block
-    if (peers.length) {
-      await Promise.all(peers.map(
-        async peer => await peer.send(JSON.stringify({ type: 'block', data: block}))
-      ))
-    }
+    // Broadcast as a server
+    const peers = Array.from(this.app.ws.server.clients)
+    peers.forEach(peer => {
+      peer.send(bytes)
+    })
   }
 
   // Socket on connect
   async socketHandler(ctx, next) {
-    ctx.websocket.id = ctx.req.headers['sec-websocket-key'].substr(0, 4)
+    ctx.websocket.id = ctx.req.headers['sec-websocket-key'].substr(0, 10)
     console.log('[NetworkNode][%s] connection', ctx.websocket.id)
 
+    // On net client connection
     // Force sync the new chain
+    // TODO: share peers
     ctx.websocket.send(JSON.stringify({
       type: 'newchain',
       data: this.peer.blockchain.chain
     }))
 
     // On message
-    ctx.websocket.on('message', async data => {
-      const msg = JSON.parse(data)
-
-      if (msg.type && msg.data) {
-        console.log('[NetworkNode][%s] sends ', ctx.websocket.id, msg.type)
-
-        switch (msg.type) {
-        case 'tx':
-          this.peer.registerTx(msg.data)
-          break
-        case 'validation':
-          this.peer.signBlock({ emitter: ctx.websocket.id })
-          break
-        }
+    ctx.websocket.on('message', data => {
+      try {
+        const msg = JSON.parse(data)
+        this.handlePeerMsg(ctx.websocket, msg)
+      } catch (err) {
+        console.error(`[NetworkNode][${ctx.websocket.id}] invalid msg`)
       }
     })
   }
