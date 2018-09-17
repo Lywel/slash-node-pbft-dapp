@@ -8,13 +8,18 @@ import socketify from 'koa-websocket'
 import getPort from 'get-port'
 import websocket from 'websocket'
 
+import { randomBytes } from 'crypto'
+import debug from 'debug'
+
 import knownPeers from './known-peers'
 import { Block } from './blockchain'
 import { Peer } from './peer'
 
-import { randomBytes } from 'crypto'
+debug.formatters.h = v => v.toString('hex')
 
 const W3CWebSocket = websocket.w3cwebsocket;
+
+const log = debug('[ NetworkNode ]')
 
 export class NetworkNode {
   constructor() {
@@ -63,7 +68,7 @@ export class NetworkNode {
       || await getPort({port: [3000, 3001, 3002, 3003, 3004, 3005, 3006]})
 
     this.server = this.app.listen(this.port, () => {
-      console.log('[NetworkNode] started on port %d', this.port)
+      log('started on port %d', this.port)
       this.peerDiscovery()
       if (process.env.MASTER)
         this.peer.startMining()
@@ -72,7 +77,7 @@ export class NetworkNode {
 
   // Stop the node
   stop() {
-    this.server.close(console.log('[NetworkNode] shutting down'))
+    this.server.close(log('shutting down'))
   }
 
   // Setup the http endpoint
@@ -105,11 +110,11 @@ export class NetworkNode {
           const msg = JSON.parse(evt.data)
           this.handlePeerMsg(ws, msg)
         } catch (err) {
-          console.error(`[NetworkNode][${ws.id || ws.url}] invalid msg`)
+          log(`[${ws.id || ws.url}] invalid msg`)
         }
       }
       ws.onopen = () => {
-        console.log(`[NetworkNode][${ws.id || ws.url}] connection opened`)
+        log(`[${ws.id || ws.url}] connection opened`)
         ws.send(JSON.stringify({
           type: 'id',
           data: {
@@ -120,7 +125,7 @@ export class NetworkNode {
         }))
       }
       ws.onclose = () => {
-        console.error(`[NetworkNode][${ws.id || ws.url}] connection closed`)
+        log(`[${ws.id || ws.url}] connection closed`)
         delete this.peers[ws.id]
       }
     }
@@ -129,7 +134,7 @@ export class NetworkNode {
   }
 
   handlePeerMsg(ws, msg) {
-    console.log(`[NetworkNode][${ws.id || ws.url}] sent a '${msg.type}' msg`)
+    log(`[${ws.id || ws.url}] sent a '${msg.type}' msg`)
 
     switch (msg.type) {
     case 'block':
@@ -148,9 +153,9 @@ export class NetworkNode {
       ws.isMaster = msg.data.master
       this.peers[msg.data.id] = ws
 
-      console.log(`[NetworkNode] new peer regitered 0x${ws.id}`)
+      log(`new peer regitered 0x${ws.id}`)
       if (ws.isMaster)
-        console.log(`[NetworkNode] 0x${ws.id} is masterNode`)
+        log(`0x${ws.id} is masterNode`)
       this.peer.blockchain.replaceChain(msg.data.chain.map(Block.fromJSON))
       break
 
@@ -170,7 +175,7 @@ export class NetworkNode {
   }
 
   broadcast(data) {
-    console.log(`[NetworkNode] broadcasting ${data.type} to ${Object.keys(this.peers).length } peers`)
+    log(`broadcasting ${data.type} to ${Object.keys(this.peers).length } peers`)
 
     const bytes = JSON.stringify(data)
 
@@ -189,16 +194,16 @@ export class NetworkNode {
       .map(([id, peer]) => peer)[0]
 
     if (masterNode) {
-      console.log(`[NetworkNode] sending ${data.type} to master`)
+      log(`sending ${data.type} to master`)
       masterNode.send(JSON.stringify(data))
     }
     else
-      console.error(`[NetworkNode] sending ${data.type} failed: masterNode unreachable`)
+      log(`sending ${data.type} failed: masterNode unreachable`)
   }
 
   // Socket on connect
   async socketHandler(ctx, next) {
-    console.log('[NetworkNode][%s] connection')
+    log('socket connection')
 
     // On net client connection
     // Force sync the new chain
@@ -218,13 +223,13 @@ export class NetworkNode {
         const msg = JSON.parse(data)
         this.handlePeerMsg(ctx.websocket, msg)
       } catch (err) {
-        console.error(`[NetworkNode][${ctx.websocket.id}] invalid msg: ${err}`)
+        log(`[${ctx.websocket.id}] invalid msg: ${err}`)
         console.log(data)
       }
     })
 
     ctx.websocket.on('close', () => {
-      console.error(`[NetworkNode][${ctx.websocket.id}] connection closed`)
+      log(`[${ctx.websocket.id}] connection closed`)
       delete this.peers[ctx.websocket.id]
     })
   }

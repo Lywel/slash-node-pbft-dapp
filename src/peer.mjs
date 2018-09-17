@@ -1,8 +1,11 @@
 import EventEmitter from 'events'
+import debug from 'debug'
 
 import { Blockchain } from './blockchain'
 import { Block } from './blockchain.mjs';
 import knownPeers from './known-peers'
+
+let log = debug('[ Peer ]')
 
 export class Peer extends EventEmitter {
   constructor() {
@@ -12,13 +15,13 @@ export class Peer extends EventEmitter {
   }
 
   async registerTx(tx) {
-    console.log('[Peer] tx received')
+    log('tx received')
 
     if (process.env.MASTER) {
       this.pendingTx.push(tx)
-      console.log('[Peer] 💸 tx registered', tx)
+      log('💸 tx registered', tx)
     } else {
-      console.log('[Peer] tx transfered', tx)
+      log('tx transfered', tx)
       this.emit('master-msg', {
         type: 'tx',
         data: tx
@@ -101,17 +104,17 @@ export class Peer extends EventEmitter {
   }
 
   signBlock(sign) {
-    console.log('[Peer] received signature from', sign.emitter)
+    log('received signature from', sign.emitter)
     if (this.pendingBlock) {
       this.pendingBlock.signatures.push(sign.emitter)
 
       if (this.pendingBlock.signatures.length > this.pendingBlock.signAmount) {
-        console.log('[Peer] ⛏️  block verified\n', this.pendingBlock)
+        log('⛏️  block verified \n%O', this.pendingBlock)
         this.blockchain.chain.push(this.pendingBlock)
         this.pendingBlock = null
       }
     } else {
-      console.error('[Peer] but there is no pending blocks')
+      log('but there is no pending blocks')
     }
   }
 
@@ -119,13 +122,13 @@ export class Peer extends EventEmitter {
     this.pendingBlock = this.buildNextBlock()
 
     this.emit('block', this.pendingBlock, (amount) => {
-      console.log(`[Peer] waiting for ${amount} signatures`)
+      log(`🚧 Block emitted, ${amount.toFixed(3)} signatures needed`)
       this.pendingBlock.signAmount = amount
     })
 
     setTimeout(() => {
       if (this.pendingBlock) {
-        console.log('[Peer] ❌ block invalid\n', this.pendingBlock)
+        log('❌ block invalid\n', this.pendingBlock)
         this.pendingBlock = null
       }
     }, 1000)
