@@ -7,7 +7,6 @@ import socketify from 'koa-websocket'
 
 import getPort from 'get-port'
 import websocket from 'websocket'
-import EventEmitter from 'events'
 
 import knownPeers from './known-peers'
 import { Block } from './blockchain'
@@ -17,9 +16,8 @@ import { randomBytes } from 'crypto'
 
 const W3CWebSocket = websocket.w3cwebsocket;
 
-export class NetworkNode extends EventEmitter {
+export class NetworkNode {
   constructor() {
-    super()
     this.id = randomBytes(16).toString('hex')
     // HTTP Server setup
     this.app = new Koa()
@@ -37,6 +35,9 @@ export class NetworkNode extends EventEmitter {
 
     this.peers = []
     this.peer = new Peer()
+    this.peer.on('master-msg', msg => {
+      this.sendMaster(msg)
+    })
     this.peer.on('block', (block, setRequiredSignatures) => {
       // Compute required signature numer
       const networkSize = Object.keys(this.peers).length
@@ -113,6 +114,7 @@ export class NetworkNode extends EventEmitter {
           type: 'id',
           data: {
             id: this.id,
+            master: !!process.env.MASTER,
             chain: this.peer.blockchain.chain
           }
         }))
@@ -142,9 +144,13 @@ export class NetworkNode extends EventEmitter {
 
     case 'id':
       // Replace local chain with a new one
-      console.log(`[NetworkNode] new peer regitered 0x${msg.data.id}`)
       ws.id = msg.data.id
+      ws.isMaster = msg.data.master
       this.peers[msg.data.id] = ws
+
+      console.log(`[NetworkNode] new peer regitered 0x${ws.id}`)
+      if (ws.isMaster)
+        console.log(`[NetworkNode] 0x${ws.id} is masterNode`)
       this.peer.blockchain.replaceChain(msg.data.chain.map(Block.fromJSON))
       break
 
@@ -176,6 +182,20 @@ export class NetworkNode extends EventEmitter {
     }
   }
 
+  sendMaster(data) {
+    // find the masterNode
+    const masterNode = Object.entries(this.peers)
+      .filter(([id, peer]) => peer.isMaster)
+      .map(([id, peer]) => peer)[0]
+
+    if (masterNode) {
+      console.log(`[NetworkNode] sending ${data.type} to master`)
+      masterNode.send(JSON.stringify(data))
+    }
+    else
+      console.error(`[NetworkNode] sending ${data.type} failed: masterNode unreachable`)
+  }
+
   // Socket on connect
   async socketHandler(ctx, next) {
     console.log('[NetworkNode][%s] connection')
@@ -187,6 +207,7 @@ export class NetworkNode extends EventEmitter {
       type: 'id',
       data: {
         id: this.id,
+        master: !!process.env.MASTER,
         chain: this.peer.blockchain.chain
       }
     }))

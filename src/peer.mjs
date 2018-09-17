@@ -1,4 +1,3 @@
-import Axios from 'axios'
 import EventEmitter from 'events'
 
 import { Blockchain } from './blockchain'
@@ -19,8 +18,11 @@ export class Peer extends EventEmitter {
       this.pendingTx.push(tx)
       console.log('[Peer] 💸 tx registered', tx)
     } else {
-      await Axios.post(`http://${knownPeers[0]}/tx`, tx)
       console.log('[Peer] tx transfered', tx)
+      this.emit('master-msg', {
+        type: 'tx',
+        data: tx
+      })
     }
   }
 
