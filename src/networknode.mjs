@@ -38,7 +38,7 @@ export class NetworkNode extends EventEmitter {
       // Compute required signature numer
       const networkSize = this.app.ws.server.clients.size
         + Object.keys(this.peers).length
-      const signNb = 2 / 3 * (networkSize) + 1
+      const signNb = 2 / 3 * (networkSize + 1)
 
       setRequiredSignatures(signNb)
 

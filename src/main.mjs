@@ -1,4 +1,4 @@
-import { NetworkNode } from './endpoint'
+import { NetworkNode } from './networknode'
 
 const node = new NetworkNode()
 
