@@ -2,13 +2,20 @@ import crypto from 'crypto'
 
 const crypto_secret = process.env.CRYPTO_SECRET || "cpassympa".toString()
 
+export class State {
+  constructor(accounts = {}) {
+    this.accounts = accounts
+  }
+}
+
 export class Block {
-  constructor(index, data, prevHash) {
+  constructor(index, data, prevHash, state) {
     this.index = index
     this.data = data
     this.prevHash = prevHash
     this.hash = this.computeHash()
     this.signatures = []
+    this.state = state
   }
 
   computeHash() {
@@ -27,7 +34,7 @@ export class Block {
   }
 
   static fromJSON(json) {
-    let block = new Block(json.index, json.data, json.prevHash)
+    let block = new Block(json.index, json.data, json.prevHash, json.state)
     block.hash = json.hash
     return block
   }
@@ -39,19 +46,19 @@ export class Blockchain {
   }
 
   genesisBlock() {
-    return new Block(0, [], 0)
+    return new Block(0, [], 0, new State({"root" : 100}))
   }
 
   lastBlock() {
     return this.chain[this.chain.length - 1]
   }
 
-  addBlock(data) {
+  addBlock(data, state) {
     let block = new Block(
       this.chain.length,
       data,
       this.lastBlock().hash,
-      Date.now())
+      state)
     this.chain.push(block)
   }
 

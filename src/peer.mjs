@@ -14,14 +14,17 @@ export class Peer extends EventEmitter {
     this.blockchain = new Blockchain()
     this.pendingTx = []
     this.id = new Identity()
+    this.pendingTxs = []
+    this.state = new State()
   }
 
   async registerTx(tx) {
     log('tx received')
 
     if (process.env.MASTER) {
-      this.pendingTx.push(tx)
-      log('💸 tx registered', tx)
+      this.pendingTx = tx
+      this.broadcastTx(tx)
+      console.log('[Peer] 💸 tx registered', tx)
     } else {
       log('tx transfered', tx)
       this.emit('master-msg', {
@@ -55,7 +58,7 @@ export class Peer extends EventEmitter {
     let transactionList = this.computeBalances()
     let resData = []
 
-    this.pendingTx.forEach(tx => {
+    this.pendingTxs.forEach(tx => {
       transactionList[tx.to] = transactionList[tx.to] || 0
       transactionList[tx.from] = transactionList[tx.from] || 0
       if (transactionList[tx.from] - tx.amount >= 0) {
@@ -68,7 +71,7 @@ export class Peer extends EventEmitter {
     })
 
     // Clear registered transactions
-    this.pendingTx = []
+    this.pendingTxs = []
 
     return new Block(
       this.blockchain.chain.length,
@@ -77,10 +80,32 @@ export class Peer extends EventEmitter {
     )
   }
 
+  checkTx(tx) {
+    return amount >= 0 && this.state[tx.from] !== null && tx.from - tx.amount >= 0
+  }
+
+  broadcastTx(sign) { // FIXME
+    console.log('[Peer] received signature from', sign.emitter)
+    if (this.pendingTx) {
+      this.pendingTx.signatures.push(sign.emitter)
+
+      if (this.pendingTx.signatures.length > this.pendingTx.signAmount) {
+        console.log('[Peer]  transaction verified\n', this.pendingTx)
+        this.pendingTx.push(this.pendingTx)
+        this.pendingTx = null
+      }
+    } else {
+      console.error('[Peer] but there is no pending blocks')
+    }
+  }
+
   checkBlock(blockToCheck) {
     let transactionList = this.computeBalances()
     let isValid = true
 
+    if (blockToCheck.prevHash !== this.blockchain.lastBlock().hash) {
+      return false
+    }
     // TODO: verify hash of previous block
 
     blockToCheck.data.forEach(tx => {
