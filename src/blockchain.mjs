@@ -1,13 +1,12 @@
 import crypto from 'crypto'
 
-const crypto_secret = process.env.CRYPTO_SECRET || Math.random().toString()
+const crypto_secret = process.env.CRYPTO_SECRET || "cpassympa".toString()
 
 export class Block {
-  constructor(index, data, prevHash, timestamp) {
+  constructor(index, data, prevHash) {
     this.index = index
     this.data = data
     this.prevHash = prevHash
-    this.timestamp = timestamp
     this.hash = this.computeHash()
     this.signatures = []
   }
@@ -15,7 +14,7 @@ export class Block {
   computeHash() {
     return crypto
       .createHmac('sha256', crypto_secret)
-      .update(this.index + this.prevHash + this.data + this.timestamp)
+      .update(this.index + this.prevHash + this.data)
       .digest('hex')
   }
 
@@ -28,7 +27,7 @@ export class Block {
   }
 
   static fromJSON(json) {
-    let block = new Block(json.index, json.data, json.prevHash, json.timestamp)
+    let block = new Block(json.index, json.data, json.prevHash)
     block.hash = json.hash
     return block
   }
@@ -40,7 +39,7 @@ export class Blockchain {
   }
 
   genesisBlock() {
-    return new Block(0, [], 0, Date.now())
+    return new Block(0, [], 0)
   }
 
   lastBlock() {
@@ -56,7 +55,7 @@ export class Blockchain {
     this.chain.push(block)
   }
 
-  isValid(chain) {
+  static isValid(chain) {
     for (let i = 1; i < chain.length; ++i) {
       const cur = chain[i]
       const prev = chain[i - 1]
@@ -68,10 +67,13 @@ export class Blockchain {
   }
 
   replaceChain(chain) {
-    if (chain[0].equals(this.chain[0])
-      && this.isValid(chain)
-      && chain.length > this.chain.length) {
+    if (!chain[0].equals(this.chain[0]))
+      console.log('genesis block dont match')
+    else if (!Blockchain.isValid(chain))
+      console.log('invalid chain')
+    else if (chain.length <= this.chain.length)
+      console.log('provided chain is shorter')
+    else
       this.chain = chain
-    }
   }
 }

@@ -5,5 +5,8 @@ export default [
   "localhost:3003",
   "localhost:3004",
   "localhost:3005",
-  "localhost:3006"
+  "localhost:3006",
+  "192.168.2.175:3000",
+  "192.168.2.175:3001",
+  "192.168.2.175:3002"
 ]

@@ -19,7 +19,7 @@ export class Peer extends EventEmitter {
       this.pendingTx.push(tx)
       console.log('[Peer] 💸 tx registered', tx)
     } else {
-      await Axios.post(`http://${KnownPeers[0]}/tx`, tx)
+      await Axios.post(`http://${knownPeers[0]}/tx`, tx)
       console.log('[Peer] tx transfered', tx)
     }
   }
@@ -67,7 +67,6 @@ export class Peer extends EventEmitter {
       this.blockchain.chain.length,
       resData,
       this.blockchain.lastBlock().hash,
-      Date.now()
     )
   }
 
