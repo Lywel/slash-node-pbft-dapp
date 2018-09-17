@@ -2,8 +2,7 @@ import EventEmitter from 'events'
 import debug from 'debug'
 import { Identity } from './identity'
 
-import { Blockchain } from './blockchain'
-import { Block } from './blockchain.mjs';
+import { Blockchain, Block, State } from './blockchain';
 import knownPeers from './known-peers'
 
 let log = debug('[ Peer ]')
@@ -77,6 +76,7 @@ export class Peer extends EventEmitter {
       this.blockchain.chain.length,
       resData,
       this.blockchain.lastBlock().hash,
+      this.state
     )
   }
 
