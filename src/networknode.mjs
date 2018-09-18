@@ -8,7 +8,6 @@ import socketify from 'koa-websocket'
 import getPort from 'get-port'
 import websocket from 'websocket'
 import debug from 'debug'
-import EventEmitter from 'events'
 
 import knownPeers from './known-peers'
 import { Block } from './blockchain'
@@ -20,9 +19,8 @@ const W3CWebSocket = websocket.w3cwebsocket;
 
 const log = debug('[ NetworkNode ]')
 
-export class NetworkNode extends EventEmitter {
+export class NetworkNode {
   constructor() {
-    super()
     // HTTP Server setup
     this.app = new Koa()
     socketify(this.app)
@@ -89,7 +87,13 @@ export class NetworkNode extends EventEmitter {
         ctx.body = this.peer.blockchain.chain
       })
       .post('/tx', async ctx => {
-        this.peer.registerTx(ctx.request.body)
+        const { msg, sig } = ctx.request.body
+        try {
+          await this.peer.handleRequest(msg, sig)
+        } catch(err) {
+          ctx.status = 500
+          ctx.body = err.msg
+        }
         ctx.status = 200
       })
 
@@ -175,6 +179,30 @@ export class NetworkNode extends EventEmitter {
     case 'validation':
       this.peer.signBlock({ emitter: ws.id })
       break
+    this.network.on('request', (msg, sig) => {
+      this.handleRequest(msg, sig)
+    })
+    this.network.on('pre-prepare', (payload, sig, msg) => {
+      this.handlePrePrepare(payload, sig, msg)
+    })
+    this.network.on('prepare', (payload, sig) => {
+      this.handlePrepare(payload, sig)
+    })
+    this.network.on('commit', (payload, sig) => {
+      handleCommit(payload, sig)
+    })
+
+    this.network.on('pre-prepare-block', (block) => {
+      this.handlePrePrepareBlock(block)
+    })
+    this.network.on('prepare-block', () => {
+      this.handlePrepareBlock()
+    })
+    this.network.on('commit-block', () => {
+      handleCommitBlock()
+    })
+
+
     }
   }
 

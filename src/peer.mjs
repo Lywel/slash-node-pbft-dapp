@@ -19,32 +19,8 @@ export class Peer extends EventEmitter {
 
 
     this.peers = []
-    this.prepareList = null
-    this.commitList = null
-    // sync
-    this.network.on('request', (msg, sig) => {
-      this.handleRequest(msg, sig)
-    })
-    this.network.on('pre-prepare', (payload, sig, msg) => {
-      this.handlePrePrepare(payload, sig, msg)
-    })
-    this.network.on('prepare', (payload, sig) => {
-      this.handlePrepare(payload, sig)
-    })
-    this.network.on('commit', (payload, sig) => {
-      handleCommit(payload, sig)
-    })
-
-    this.network.on('pre-prepare-block', (block) => {
-      this.handlePrePrepareBlock(block)
-    })
-    this.network.on('prepare-block', () => {
-      this.handlePrepareBlock()
-    })
-    this.network.on('commit-block', () => {
-      handleCommitBlock()
-    })
-
+    this.prepareList = []
+    this.commitList = []
 
     this.onTransaction = false
     this.message = null
@@ -54,21 +30,18 @@ export class Peer extends EventEmitter {
 
   }
 
-  handleRequest(msg, sig) {
-    if (!Identity.verifySig(msg, sig, msg.client)) {
-      log('ERROR: signature of client\'s request is incorrect')
-      return
-    }
+  async handleRequest(msg, sig) {
+    if (!Identity.verifySig(msg, sig, msg.client))
+      throw new Error('Wrong client request signature')
+
     if (this.i !== this.state.view % this.state.nbNodes) {
-      log('error : replica receiving request')
-      // trigger change view
-      return
-    }
-    if (this.onTransaction) {
-      // a transaction is already being computed
-      // implement queue ?
-      return
-    }
+      throw new Error('Cannot handle request: not masterNode')
+      // TODO: trigger change view
+
+    if (this.onTransaction)
+      throw new Error('Network is busy and cant accept new transactions')
+      // TODO: implement queue
+
     this.message = msg
     this.messageSig = sig
 
@@ -77,8 +50,10 @@ export class Peer extends EventEmitter {
       seqNb: this.state.seqNb,
       digest: this.id.hash(msg)
     }
+
     this.prepareList = new Set()
     this.prepareList.add(this.peers[this.i])
+
     this.onTransaction = true
     this.emit('pre-prepare', payload, this.id.sign(payload), msg)
   }
