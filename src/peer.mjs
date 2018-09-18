@@ -10,11 +10,10 @@ let log = debug('[ Peer ]')
 export class Peer extends EventEmitter {
   constructor(network) {
     super()
-    this.blockchain = new Blockchain()
-    this.pendingTx = null
     this.id = new Identity()
     this.state = new State()
     this.i = 0
+
 
     this.peers = []
     this.prepareList = []
@@ -50,7 +49,7 @@ export class Peer extends EventEmitter {
       // implement queue ?
       return
     }
-    this.pendingTx = msg
+    this.message = msg
 
     const payload = {
       view: this.state.view,
