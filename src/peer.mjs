@@ -19,8 +19,8 @@ export class Peer extends EventEmitter {
 
 
     this.peers = []
-    this.prepareList = []
-    this.commitList = []
+    this.prepareList = null
+    this.commitList = null
     // sync
     this.network.on('request', (msg, sig) => {
       this.handleRequest(msg, sig)
@@ -64,7 +64,7 @@ export class Peer extends EventEmitter {
       // trigger change view
       return
     }
-    if (this.onTransaction === true) {
+    if (this.onTransaction) {
       // a transaction is already being computed
       // implement queue ?
       return
@@ -77,6 +77,8 @@ export class Peer extends EventEmitter {
       seqNb: this.state.seqNb,
       digest: this.id.hash(msg)
     }
+    this.prepareList = new Set()
+    this.prepareList.add(this.peers[this.i])
     this.onTransaction = true
     this.emit('pre-prepare', payload, this.id.sign(payload), msg)
   }
@@ -101,7 +103,9 @@ export class Peer extends EventEmitter {
       ...payload,
       i: this.i
     }
-    this.prepareList.push(payloadI)
+    this.prepareList = new Set()
+    this.prepareList.add(this.peers[this.i])
+    this.onTransaction = true
     this.emit('prepare', payloadI, this.id.sign(payloadI))
   }
 
@@ -125,17 +129,15 @@ export class Peer extends EventEmitter {
       return
     }
 
-    this.prepareList.push(payload)
-    if (this.prepareList.length >= (2 / 3) * this.state.nbNodes) {
-      this.phase = 2
+    this.prepareList.add(this.peers[payload.i])
+    if (this.prepareList.size >= (2 / 3) * this.state.nbNodes) {
+      this.commitList = new Set()
+      this.commitList.add(this.peers[this.i])
       this.emit('commit', payload, this.id.sign(payload))
     }
   }
 
   handleCommit(payload, sig) {
-    if (this.phase !== 2) {
-      return
-    }
     if (!Identity.verifySig(payload, sig, peers[payload.i])) {
       log('ERROR: signature of payload is not correct in prepare phase')
       return
@@ -153,14 +155,14 @@ export class Peer extends EventEmitter {
       return
     }
 
-    this.commitList.push(payload)
-    if (this.commitList.length > (1 / 3) * this.state.nbNodes) {
+    this.commitList.add(this.peers[payload.i])
+    if (this.commitList.size > (1 / 3) * this.state.nbNodes) {
 
       this.replyToClient()
       this.state.h++
       this.onTransaction = false
-      this.prepareList = []
-      this.commitList = []
+      this.prepareList = null
+      this.commitList = null
       this.message = null
       this.messageSig = null
     }
@@ -177,7 +179,7 @@ export class Peer extends EventEmitter {
 
     const tx = this.message.tx
     if (!this.state.accounts[tx.from]
-      || this.state.accounts[tx.from] - this.message.amount < 0) {
+      || this.state.accounts[tx.from] - tx.amount < 0) {
         result.valid = false
     } else {
       this.state.accounts[tx.to] = this.state.accounts[tx.to] || 0
@@ -195,16 +197,12 @@ export class Peer extends EventEmitter {
 
 
   buildNextBlock() {
-    const block = new Block(
+    return new Block(
       this.blockchain.chain.length,
       this.pendingTxs,
       this.blockchain.lastBlock().hash,
       this.state
     )
-    // Clear registered transactions
-    this.pendingTxs = []
-
-    return block
   }
 
   checkBlock(blockToCheck) {
@@ -213,7 +211,10 @@ export class Peer extends EventEmitter {
   }
 
   handlePrePrepareBlock(block) {
-
+    this.pendingBlock = block
+    this.prepareList = new Set()
+    this.prepareList.add(payloadI.i)
+    this.emit('prepare-block', payloadI, this.id.sign(payloadI))
   }
 
   signBlock(sign) {
@@ -233,11 +234,10 @@ export class Peer extends EventEmitter {
 
   mine() {
     this.pendingBlock = this.buildNextBlock()
+    this.pendingTxs = []
 
-    this.emit('block', this.pendingBlock, (amount) => {
-      log(`🚧 Block emitted, ${amount.toFixed(3)} signatures needed`)
-      this.pendingBlock.signAmount = amount
-    })
+
+    this.emit('pre-prepare-block', this.pendingBlock)
 
     setTimeout(() => {
       if (this.pendingBlock) {
@@ -246,7 +246,7 @@ export class Peer extends EventEmitter {
       }
     }, 1000)
 
-    this.signBlock({emitter: this.id.publicKey.toString('hex')})
+    this.prepareList.push({emitter: this.id.publicKey.toString('hex')})
   }
 
   startMining() {
