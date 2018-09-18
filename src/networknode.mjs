@@ -8,7 +8,6 @@ import socketify from 'koa-websocket'
 import getPort from 'get-port'
 import websocket from 'websocket'
 
-import { randomBytes } from 'crypto'
 import debug from 'debug'
 
 import knownPeers from './known-peers'
@@ -23,7 +22,6 @@ const log = debug('[ NetworkNode ]')
 
 export class NetworkNode {
   constructor() {
-    this.id = randomBytes(16).toString('hex')
     // HTTP Server setup
     this.app = new Koa()
     socketify(this.app)
@@ -118,7 +116,7 @@ export class NetworkNode {
         ws.send(JSON.stringify({
           type: 'id',
           data: {
-            id: this.id,
+            id: this.peer.id.publicKey.toString('hex'),
             master: !!process.env.MASTER,
             chain: this.peer.blockchain.chain
           }
@@ -134,7 +132,10 @@ export class NetworkNode {
   }
 
   handlePeerMsg(ws, msg) {
-    log(`[${ws.id || ws.url}] sent a '${msg.type}' msg`)
+    if (ws.log)
+      ws.log('sent a %s msg', msg.type)
+    else
+      log(`[${ws.id || ws.url}] sent a '${msg.type}' msg`)
 
     switch (msg.type) {
     case 'block':
@@ -151,11 +152,12 @@ export class NetworkNode {
       // Replace local chain with a new one
       ws.id = msg.data.id
       ws.isMaster = msg.data.master
+      ws.log = log.extend(ws.id.substr(0, 8))
       this.peers[msg.data.id] = ws
 
-      log(`new peer regitered 0x${ws.id}`)
+      ws.log(`registered`)
       if (ws.isMaster)
-        log(`0x${ws.id} is masterNode`)
+        ws.log(`is masterNode`)
       this.peer.blockchain.replaceChain(msg.data.chain.map(Block.fromJSON))
       break
 
@@ -211,7 +213,7 @@ export class NetworkNode {
     ctx.websocket.send(JSON.stringify({
       type: 'id',
       data: {
-        id: this.id,
+        id: this.peer.id.publicKey.toString('hex'),
         master: !!process.env.MASTER,
         chain: this.peer.blockchain.chain
       }

@@ -67,13 +67,9 @@ export class Blockchain {
   }
 
   replaceChain(chain) {
-    if (!chain[0].equals(this.chain[0]))
-      console.log('genesis block dont match')
-    else if (!Blockchain.isValid(chain))
-      console.log('invalid chain')
-    else if (chain.length <= this.chain.length)
-      console.log('provided chain is shorter')
-    else
+    if (chain[0].equals(this.chain[0])
+      && Blockchain.isValid(chain)
+      && chain.length > this.chain.length)
       this.chain = chain
   }
 }

@@ -1,5 +1,6 @@
 import EventEmitter from 'events'
 import debug from 'debug'
+import { Identity } from './identity'
 
 import { Blockchain } from './blockchain'
 import { Block } from './blockchain.mjs';
@@ -12,6 +13,7 @@ export class Peer extends EventEmitter {
     super()
     this.blockchain = new Blockchain()
     this.pendingTx = []
+    this.id = new Identity()
   }
 
   async registerTx(tx) {
@@ -104,12 +106,12 @@ export class Peer extends EventEmitter {
   }
 
   signBlock(sign) {
-    log('received signature from', sign.emitter)
+    log('received signature from', sign.emitter.substr(0, 8))
     if (this.pendingBlock) {
       this.pendingBlock.signatures.push(sign.emitter)
 
       if (this.pendingBlock.signatures.length > this.pendingBlock.signAmount) {
-        log('⛏️  block verified \n%O', this.pendingBlock)
+        log('⛏️  block %d verified', this.pendingBlock.index)
         this.blockchain.chain.push(this.pendingBlock)
         this.pendingBlock = null
       }
@@ -133,7 +135,7 @@ export class Peer extends EventEmitter {
       }
     }, 1000)
 
-    this.signBlock({emitter: 'MasterPeer'})
+    this.signBlock({emitter: this.id.publicKey.toString('hex')})
   }
 
   startMining() {
