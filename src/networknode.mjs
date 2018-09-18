@@ -7,8 +7,8 @@ import socketify from 'koa-websocket'
 
 import getPort from 'get-port'
 import websocket from 'websocket'
-
 import debug from 'debug'
+import EventEmitter from 'events'
 
 import knownPeers from './known-peers'
 import { Block } from './blockchain'
@@ -20,8 +20,9 @@ const W3CWebSocket = websocket.w3cwebsocket;
 
 const log = debug('[ NetworkNode ]')
 
-export class NetworkNode {
+export class NetworkNode extends EventEmitter {
   constructor() {
+    super()
     // HTTP Server setup
     this.app = new Koa()
     socketify(this.app)
@@ -37,7 +38,8 @@ export class NetworkNode {
       .use(async ctx => await this.socketHandler(ctx))
 
     this.peers = []
-    this.peer = new Peer()
+    this.peer = new Peer(this)
+
     this.peer.on('master-msg', msg => {
       this.sendMaster(msg)
     })

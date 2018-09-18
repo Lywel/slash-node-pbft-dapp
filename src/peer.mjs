@@ -1,8 +1,7 @@
 import EventEmitter from 'events'
 import debug from 'debug'
 import { Identity } from './identity'
-
-import { Blockchain, Block } from './blockchain';
+import { Blockchain, Block, State } from './blockchain';
 import knownPeers from './known-peers'
 
 let log = debug('[ Peer ]')
@@ -10,6 +9,7 @@ let log = debug('[ Peer ]')
 export class Peer extends EventEmitter {
   constructor(network) {
     super()
+    this.network = network
     this.id = new Identity()
     this.blockchain = new Blockchain()
     this.state = new State()
@@ -22,26 +22,26 @@ export class Peer extends EventEmitter {
     this.prepareList = []
     this.commitList = []
     // sync
-    network.on('request', (msg, sig) => {
+    this.network.on('request', (msg, sig) => {
       this.handleRequest(msg, sig)
     })
-    network.on('pre-prepare', (payload, sig, msg) => {
+    this.network.on('pre-prepare', (payload, sig, msg) => {
       this.handlePrePrepare(payload, sig, msg)
     })
-    network.on('prepare', (payload, sig) => {
+    this.network.on('prepare', (payload, sig) => {
       this.handlePrepare(payload, sig)
     })
-    network.on('commit', (payload, sig) => {
+    this.network.on('commit', (payload, sig) => {
       handleCommit(payload, sig)
     })
 
-    network.on('pre-prepare-block', (block) => {
+    this.network.on('pre-prepare-block', (block) => {
       this.handlePrePrepareBlock(block)
     })
-    network.on('prepare-block', () => {
+    this.network.on('prepare-block', () => {
       this.handlePrepareBlock()
     })
-    network.on('commit-block', () => {
+    this.network.on('commit-block', () => {
       handleCommitBlock()
     })
 
@@ -156,7 +156,7 @@ export class Peer extends EventEmitter {
     this.commitList.push(payload)
     if (this.commitList.length > (1 / 3) * this.state.nbNodes) {
 
-      await this.replyToClient()
+      this.replyToClient()
       this.state.h++
       this.onTransaction = false
       this.prepareList = []
@@ -166,7 +166,7 @@ export class Peer extends EventEmitter {
     }
   }
 
-  async replyToClient() {
+  replyToClient() {
     let result = {
       view: this.view,
       timestamp: this.message.timestamp,
@@ -215,10 +215,6 @@ export class Peer extends EventEmitter {
   handlePrePrepareBlock(block) {
 
   }
-
-
-
-
 
   signBlock(sign) {
     log('received signature from', sign.emitter.substr(0, 8))
