@@ -4,6 +4,17 @@ import { Identity } from './identity'
 import { Blockchain, Block, State } from './blockchain';
 import knownPeers from './known-peers'
 
+/**
+ * formats:
+ *
+ * Message from client:
+ * arg1: msg { tx: { from, to, amount }, timestamp, client }
+ * arg2: sig
+ *
+ * Reply to client:
+ * { view, timestamp, client, i, valid }
+ */
+
 let log = debug('[ Peer ]')
 
 export class Peer extends EventEmitter {
