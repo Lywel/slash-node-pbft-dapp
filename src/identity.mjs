@@ -5,7 +5,6 @@ export class Identity {
   constructor(privateKey, publicKey) {
     this.privateKey = privateKey || Identity.genPrivateKey()
     this.publicKey = publicKey || secp256k1.publicKeyCreate(this.privateKey)
-    console.log(this.privateKey, this.publicKey)
   }
 
   sign(obj) {
@@ -17,7 +16,11 @@ export class Identity {
   }
 
   static verifySig(obj, sig, publicKey) {
-    return secp256k1.verify(Identity.hash(obj), sig, publicKey)
+    try {
+      return secp256k1.verify(Identity.hash(obj), sig, publicKey)
+    } catch (err) {
+      return false
+    }
   }
 
   static verifyHash(obj, hash) {

@@ -17,7 +17,7 @@ debug.formatters.h = v => v.toString('hex')
 
 const W3CWebSocket = websocket.w3cwebsocket;
 
-const log = debug('[ NetworkNode ]')
+const log = debug('network-node')
 
 export class NetworkNode {
   constructor() {
@@ -38,9 +38,18 @@ export class NetworkNode {
     this.peers = []
     this.peer = new Peer(this)
 
+    this.peer.on('pre-prepare', (payload, sig, msg) => {
+      console.log('pre-prepare')
+      broadcast({
+        type: 'pre-prepare',
+        data: { payload, sig, msg }
+      })
+    })
+
     this.peer.on('master-msg', msg => {
       this.sendMaster(msg)
     })
+
     this.peer.on('block', (block, setRequiredSignatures) => {
       // Compute required signature numer
       const networkSize = Object.keys(this.peers).length
@@ -68,8 +77,6 @@ export class NetworkNode {
     this.server = this.app.listen(this.port, () => {
       log('started on port %d', this.port)
       this.peerDiscovery()
-      if (process.env.MASTER)
-        this.peer.startMining()
     })
   }
 
@@ -88,15 +95,9 @@ export class NetworkNode {
       })
       .post('/tx', async ctx => {
         const { msg, sig } = ctx.request.body
-        try {
-          await this.peer.handleRequest(msg, sig)
-        } catch(err) {
-          ctx.status = 500
-          ctx.body = err.msg
-        }
+        await this.peer.handleRequest(msg, Buffer.from(sig))
         ctx.status = 200
       })
-
     return router
   }
 
@@ -147,13 +148,11 @@ export class NetworkNode {
     case 'block':
       // Receied block for validation
       this.peer.checkBlock(msg.data)
-      this.broadcast({
+      return this.broadcast({
         type: 'validation',
         data: true,
         id: msg.data.index
       })
-      break
-
     case 'id':
       // Replace local chain with a new one
       ws.id = msg.data.id
@@ -164,45 +163,16 @@ export class NetworkNode {
       ws.log(`registered`)
       if (ws.isMaster)
         ws.log(`is masterNode`)
-      this.peer.blockchain.replaceChain(msg.data.chain.map(Block.fromJSON))
-      break
-
+      return this.peer.blockchain.replaceChain(msg.data.chain.map(Block.fromJSON))
     case 'blockchain':
       // Compare chain and eventually replace it
-      this.peer.blockchain.replaceChain(msg.data.map(Block.fromJSON))
-      break
-
-    // Master node
+      return this.peer.blockchain.replaceChain(msg.data.map(Block.fromJSON))
     case 'tx':
-      this.peer.registerTx(msg.data)
-      break
+      return this.peer.registerTx(msg.data)
     case 'validation':
-      this.peer.signBlock({ emitter: ws.id })
-      break
-    this.network.on('request', (msg, sig) => {
-      this.handleRequest(msg, sig)
-    })
-    this.network.on('pre-prepare', (payload, sig, msg) => {
-      this.handlePrePrepare(payload, sig, msg)
-    })
-    this.network.on('prepare', (payload, sig) => {
-      this.handlePrepare(payload, sig)
-    })
-    this.network.on('commit', (payload, sig) => {
-      handleCommit(payload, sig)
-    })
-
-    this.network.on('pre-prepare-block', (block) => {
-      this.handlePrePrepareBlock(block)
-    })
-    this.network.on('prepare-block', () => {
-      this.handlePrepareBlock()
-    })
-    this.network.on('commit-block', () => {
-      handleCommitBlock()
-    })
-
-
+      return this.peer.signBlock({ emitter: ws.id })
+    case 'pre-prepare':
+      return this.peer.handlePrePrepare(msg.data.payload, msg.data.sig, msg.data.msg)
     }
   }
 
