@@ -2,40 +2,175 @@ import EventEmitter from 'events'
 import debug from 'debug'
 import { Identity } from './identity'
 
-import { Blockchain, Block, State } from './blockchain';
+import { Blockchain, Block } from './blockchain';
 import knownPeers from './known-peers'
 
 let log = debug('[ Peer ]')
 
 export class Peer extends EventEmitter {
-  constructor() {
+  constructor(network) {
     super()
     this.blockchain = new Blockchain()
-    this.pendingTx = []
+    this.pendingTx = null
     this.id = new Identity()
-    this.pendingTxs = []
     this.state = new State()
+    this.i = 0
+
+    this.peers = []
+    this.prepareList = []
+    this.commitList = []
+    // sync
+    network.on('request', (msg) => {
+      this.handleRequest(msg)
+    })
+    network.on('pre-prepare', (payload, sig, msg) => {
+      this.handlePrePrepare(payload, sig, msg)
+    })
+    network.on('prepare', (payload, sig) => {
+      this.handlePrepare(payload, sig)
+    })
+    network.on('commit', (payload, sig) => {
+      handleCommit(payload, sig)
+    })
+
+
+    this.onTransaction = false
+    this.message = null
+
   }
 
-  async registerTx(tx) {
-    log('tx received')
-
-    if (process.env.MASTER) {
-      this.pendingTx = tx
-      this.broadcastTx(tx)
-      console.log('[Peer] 💸 tx registered', tx)
-    } else {
-      log('tx transfered', tx)
-      this.emit('master-msg', {
-        type: 'tx',
-        data: tx
-      })
+  handleRequest(msg) {
+    if (this.i !== this.state.view % this.state.nbNodes) {
+      log('error : replica receiving request')
+      // trigger change view
+      return
     }
+    if (this.onTransaction === true) {
+      // a transaction is already being computed
+      // implement queue ?
+      return
+    }
+    this.pendingTx = msg
+
+    const payload = {
+      view: this.state.view,
+      seqNb: this.state.seqNb,
+      digest: this.id.hash(msg)
+    }
+    this.onTransaction = true
+    this.emit('pre-prepare', payload, this.id.sign(payload), msg)
+  }
+
+  handlePrePrepare(payload, sig, msg) {
+    if (!Identity.verifySig(payload, sig, peers[payload.i])) {
+      log('ERROR: signature of payload is not correct in pre-prepare phase')
+      return
+    }
+    if (!Identity.verifyHash(msg ,payload.digest)) {
+      log('ERROR: checksum of msg is not correct in pre-prepare phase')
+      return
+    }
+    if (payload.v !== this.state.v) {
+      log('ERROR: state (v) does not correspond with the message')
+      return
+    }
+
+    this.message = msg
+
+    const payloadI = {
+      ...payload,
+      i: this.i
+    }
+    this.prepareList.push(payloadI)
+    this.emit('prepare', payloadI, this.id.sign(payloadI))
+  }
+
+
+  handlePrepare(payload, sig) {
+
+    if (!Identity.verifySig(payload, sig, peers[payload.i])) {
+      log('ERROR: signature of payload is not correct in prepare phase')
+      return
+    }
+    if (!Identity.verifyHash(this.message ,payload.digest)) {
+      log('ERROR: checksum of msg is not correct in prepare phase')
+      return
+    }
+    if (payload.view !== this.state.view) {
+      log('ERROR: state (v) is not correct in prepare message')
+      return
+    }
+    if (payload.seqNb < this.state.h) {
+      log('ERROR: problem in sequence number')
+      return
+    }
+
+    this.prepareList.push(payload)
+    if (this.prepareList.length >= (2 / 3) * this.state.nbNodes) {
+      this.phase = 2
+      this.emit('commit', payload, this.id.sign(payload))
+    }
+  }
+
+  handleCommit(payload, sig) {
+    if (this.phase !== 2) {
+      return
+    }
+    if (!Identity.verifySig(payload, sig, peers[payload.i])) {
+      log('ERROR: signature of payload is not correct in prepare phase')
+      return
+    }
+    if (!Identity.verifyHash(message ,payload.digest)) {
+      log('ERROR: checksum of msg is not correct in commit phase')
+      return
+    }
+    if (payload.view !== this.state.view) {
+      log('ERROR: state (v) is not correct in prepare message')
+      return
+    }
+    if (payload.seqNb < this.state.h) {
+      log('ERROR: problem in sequence number')
+      return
+    }
+
+    this.commitList.push(payload)
+    if (this.commitList.length > (1 / 3) * this.state.nbNodes) {
+
+      await this.replyToClient()
+      this.state.pendingTxs.push(this.message)
+      this.state.h++
+      this.onTransaction = false
+      this.prepareList = []
+      this.commitList = []
+      this.message = {}
+    }
+  }
+
+  async replyToClient() {
+    let result = {
+      view: this.view,
+      timestamp: this.message.timestamp,
+      client: this.message.client,
+      i: this.i,
+      valid: true
+    }
+
+    const tx = this.message.tx
+    if (!this.state.accounts[tx.from]
+      || this.state.accounts[tx.from] - this.message.amount < 0) {
+        result.valid = false
+    } else {
+      this.state.accounts[tx.to] = this.state.accounts[tx.to] || 0
+
+      this.state.accounts[tx.from] -= tx.amount
+      this.state.accounts[tx.to] += tx.amount
+    }
+    this.emit('reply', result, this.id.sign(result))
   }
 
   computeBalances() {
     let transactionList = {}
-    transactionList["root"] = 100
+    transactionList['root'] = 100
 
     this.blockchain.chain.forEach(block => {
       block.data.forEach(tx => {
@@ -80,24 +215,7 @@ export class Peer extends EventEmitter {
     )
   }
 
-  checkTx(tx) {
-    return amount >= 0 && this.state[tx.from] !== null && tx.from - tx.amount >= 0
-  }
 
-  broadcastTx(sign) { // FIXME
-    console.log('[Peer] received signature from', sign.emitter)
-    if (this.pendingTx) {
-      this.pendingTx.signatures.push(sign.emitter)
-
-      if (this.pendingTx.signatures.length > this.pendingTx.signAmount) {
-        console.log('[Peer]  transaction verified\n', this.pendingTx)
-        this.pendingTx.push(this.pendingTx)
-        this.pendingTx = null
-      }
-    } else {
-      console.error('[Peer] but there is no pending blocks')
-    }
-  }
 
   checkBlock(blockToCheck) {
     let transactionList = this.computeBalances()

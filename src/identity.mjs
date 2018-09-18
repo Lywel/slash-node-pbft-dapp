@@ -13,11 +13,15 @@ export class Identity {
   }
 
   verify(obj, sig) {
-    return Identity.verify(data, sig, this.publicKey)
+    return Identity.verifySig(obj, sig, this.publicKey)
   }
 
-  static verify(obj, sig, publicKey) {
+  static verifySig(obj, sig, publicKey) {
     return secp256k1.verify(Identity.hash(obj), sig, publicKey)
+  }
+
+  static verifyHash(obj, hash) {
+    return Identity.hash(obj).equals(hash)
   }
 
   static hash(obj) {

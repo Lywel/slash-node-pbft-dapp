@@ -3,8 +3,14 @@ import crypto from 'crypto'
 const crypto_secret = process.env.CRYPTO_SECRET || "cpassympa".toString()
 
 export class State {
-  constructor(accounts = {}) {
-    this.accounts = accounts
+  constructor() {
+    this.accounts = {'0' : 100}
+    this.blockchain = new Blockchain()
+    this.pendingTxs = []
+    this.view = 0
+    this.seqNb = 0
+    this.h = 0
+    this.nbNodes = 1
   }
 }
 
