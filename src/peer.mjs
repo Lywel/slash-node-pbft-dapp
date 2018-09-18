@@ -147,6 +147,7 @@ export class Peer extends EventEmitter {
 
         this.replyToClient()
         this.state.h++
+        this.state.seqNb++
         this.onTransaction = false
         this.prepareList = null
         this.commitList = null
