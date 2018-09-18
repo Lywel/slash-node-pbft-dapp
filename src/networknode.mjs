@@ -4,6 +4,7 @@ import logger from 'koa-logger'
 import bodyParser from 'koa-bodyparser'
 import json from 'koa-json'
 import socketify from 'koa-websocket'
+import cors from 'koa-cors'
 
 import getPort from 'get-port'
 import websocket from 'websocket'
@@ -28,6 +29,7 @@ export class NetworkNode {
 
     this.app
       .use(logger())
+      .use(cors())
       .use(json())
       .use(bodyParser())
       .use(this.httpRouter().routes())
