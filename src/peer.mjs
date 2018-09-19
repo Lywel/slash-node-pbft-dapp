@@ -74,11 +74,11 @@ export class Peer extends EventEmitter {
   async handlePrePrepare(payload, sig, msg) {
     if (!Identity.verifySig(payload, sig,
       this.peers[this.state.view % this.state.nbNodes]))
-      throw new Error('signature of payload is not correct in pre-prepare phase')
+      throw new Error('pre-prepare: wrong payload signature')
     if (!Identity.verifyHash(msg ,payload.digest))
-      throw new Error('checksum of msg is not correct in pre-prepare phase')
+      throw new Error('pre-prepare: wrong checksum for message')
     if (payload.v !== this.state.v)
-      throw new Error('state (v) does not correspond in pre-prepare phase')
+      throw new Error('pre-prepare: wrong view number')
 
     this.message = msg
 
@@ -96,13 +96,13 @@ export class Peer extends EventEmitter {
   handlePrepare(payload, sig) {
 
     if (!Identity.verifySig(payload, sig, peers[payload.i]))
-      throw new Error('signature of payload is not correct in prepare phase')
+      throw new Error('prepare: wrong payload signature')
     if (!Identity.verifyHash(this.message, payload.digest))
-      throw new Error('checksum of msg is not correct in prepare phase')
+      throw new Error('prepare: wrong checksum for message')
     if (payload.view !== this.state.view)
-      throw new Error('state (v) is not correct in prepare phase')
+      throw new Error('prepare: wrong view number')
     if (payload.seqNb < this.state.h)
-      throw new Error('problem in sequence number')
+      throw new Error('prepare: sequence number is lower than h')
 
     this.prepareList.add(this.peers[payload.i])
     if (this.prepareList.size >= (2 / 3) * this.state.nbNodes) {
@@ -114,13 +114,13 @@ export class Peer extends EventEmitter {
 
   handleCommit(payload, sig) {
     if (!Identity.verifySig(payload, sig, peers[payload.i]))
-      throw new Error('signature of payload is not correct in prepare phase')
+      throw new Error('commit: wrong payload signature')
     if (!Identity.verifyHash(message, payload.digest))
-      throw new Error('checksum of msg is not correct in commit phase')
+      throw new Error('commit: wrong checksum for message')
     if (payload.view !== this.state.view)
-      throw new Error('state (v) is not correct in commit phase')
+      throw new Error('commit: wrong view number')
     if (payload.seqNb < this.state.h)
-      throw new Error('problem in sequence number')
+      throw new Error('commit: sequence number is lower than h')
 
     this.commitList.add(this.peers[payload.i])
     if (this.commitList.size > (1 / 3) * this.state.nbNodes) {
@@ -192,18 +192,18 @@ export class Peer extends EventEmitter {
     this.prepareList.add(emitter)
 
     if (!this.pendingBlock || !this.pendingBlockSig) {
-      return
+      throw new Error('prepare received but there is no pending block')
     }
     if (!Identity.verifySig(this.pendingBlock, this.pendingBlockSig,
       this.peers[this.state.view % this.state.nbNodes])) {
       this.pendingBlock = null
       this.pendingBlockSig = null
-      throw ('Block signature is invalid')
+      throw new Error('Block signature is invalid')
     }
     if (!this.checkBlock(this.pendingBlock)) {
       this.pendingBlock = null
       this.pendingBlockSig = null
-      throw ('Block verification failed')
+      throw new Error('Block verification failed: hashs don\'t match')
     }
 
     this.prepareList.add(emitter)
@@ -223,6 +223,7 @@ export class Peer extends EventEmitter {
     this.commitList.add(emitter)
     if (this.commitList.size > (1 / 3) * this.state.nbNodes) {
       this.blockchain.chain.push(this.pendingBlock)
+      log('⛏ block added to blockchain')
       this.pendingTxs = []
       this.pendingBlock = null
       this.pendingBlockSig = null
