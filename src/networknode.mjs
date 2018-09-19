@@ -33,42 +33,23 @@ export class NetworkNode {
       .use(bodyParser())
       .use(this.httpRouter().routes())
 
-    // Websocket p2p server setup
-    this.app.ws
-      .use(async ctx => await this.socketHandler(ctx))
+    this.app.ws.use(this.socketHandler.bind(this))
 
     this.peers = []
     this.peer = new Peer(this)
 
-    this.peer.on('pre-prepare', (payload, sig, msg) => {
-      log('pre-prepare')
-      this.broadcast({
-        type: 'pre-prepare',
-        data: { payload, sig, msg }
-      })
-    })
+    this.peerEventHandler = this.peerEventHandler.bind(this)
+    this.peer.on('pre-prepare', this.peerEventHandler('pre-prepare'))
+    this.peer.on('prepare', this.peerEventHandler('prepare'))
+    this.peer.on('commit', this.peerEventHandler('commit'))
+    this.peer.on('reply', this.peerEventHandler('reply'))
+  }
 
-    this.peer.on('master-msg', msg => {
-      this.sendMaster(msg)
-    })
-
-    this.peer.on('block', (block, setRequiredSignatures) => {
-      // Compute required signature numer
-      const networkSize = Object.keys(this.peers).length
-      const signNb = 2 / 3 * (networkSize + 1)
-
-      setRequiredSignatures(signNb)
-
-      this.broadcast({
-        type: 'blockchain',
-        data: this.peer.blockchain.chain
-      })
-
-      this.broadcast({
-        type: 'block',
-        data: block
-      })
-    })
+  peerEventHandler(type) {
+    return (data) => {
+      log(type)
+      this.broadcast({ type, data })
+    }
   }
 
   // Start the node
@@ -142,14 +123,6 @@ export class NetworkNode {
       log(`[${ws.id || ws.url}] sent a '${req.type}' req`)
 
     switch (req.type) {
-    case 'block':
-      // Receied block for validation
-      this.peer.checkBlock(req.data)
-      return this.broadcast({
-        type: 'validation',
-        data: true,
-        id: req.data.index
-      })
     case 'id':
       // Replace local chain with a new one
       ws.id = req.data.id
@@ -161,8 +134,6 @@ export class NetworkNode {
       if (ws.isMaster)
         ws.log(`is masterNode`)
       return this.peer.blockchain.replaceChain(req.data.chain.map(Block.fromJSON))
-    case 'blockchain':
-      return this.peer.blockchain.replaceChain(req.data.map(Block.fromJSON))
     case 'req':
       const { msg, sig } = req.data
       try {
@@ -171,14 +142,12 @@ export class NetworkNode {
         log('Error: ' + err.message)
       }
       break
-    case 'validation':
-      return this.peer.signBlock({ emitter: ws.id })
     case 'pre-prepare':
-      return this.peer
-        .handlePrePrepare(req.data.payload, req.data.sig, req.data.req)
+      return this.peer.handlePrePrepare(req.data)
     case 'prepare':
-      return this.peer
-        .handlePrepare(req.data.payload, req.data.sig)
+      return this.peer.handlePrepare(req.data)
+    case 'commit':
+      return this.peer.handleCommit(req.data)
     default:
       throw new Error(`Unhandled request type '${req.type}'`)
     }
@@ -215,9 +184,6 @@ export class NetworkNode {
   async socketHandler(ctx, next) {
     log('socket connection')
 
-    // On net client connection
-    // Force sync the new chain
-    // TODO: share peers
     ctx.websocket.send(JSON.stringify({
       type: 'id',
       data: {
