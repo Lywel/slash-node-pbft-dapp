@@ -42,8 +42,10 @@ export class Peer extends EventEmitter {
 
   }
 
-  async handleRequest(msg, sig) {
-    log('request')
+  handleRequest(msg, sig) {
+    log('Handleing a request')
+    log(msg)
+    log(sig)
     if (!Identity.verifySig(msg, sig, msg.client))
       throw new Error('Wrong signature on client\'s request')
 

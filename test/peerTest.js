@@ -33,18 +33,21 @@ describe('Peer handleRequest', () => {
   it('Should reject on wront sig', () => {
     const sig = crypto.randomBytes(32)
 
-    return peer.handleRequest(validMsg, sig).should.be
-      .rejectedWith(Error, 'Wrong signature on client\'s request')
+    expect(() => {
+      peer.handleRequest(validMsg, sig)
+    }).to.throw(Error, 'Wrong signature on client\'s request')
   })
 
   it('Should not throw on valid sig', () => {
-    const sig = id.sign(validMsg).signature
-    return peer.handleRequest(validMsg, sig).should.be.fulfilled
+    const sig = id.sign(validMsg)
+    expect(() => {
+      peer.handleRequest(validMsg, sig)
+    }).to.not.throw()
   })
 
   it('Should emit a \'pre-prepare\' event on succed', () => {
     const evt = peer.should.emit('pre-prepare')
-    const sig = id.sign(validMsg).signature
+    const sig = id.sign(validMsg)
     peer.handleRequest(validMsg, sig)
     return evt
   })
@@ -84,7 +87,7 @@ describe('Peer handlePrePrepare', () => {
   })
 
   it('Should accept a valid sig', () => {
-    const sig = id.sign(validPayload).signature
+    const sig = id.sign(validPayload)
     peer.peers.push(id.publicKey)
 
     expect(() => {
@@ -94,7 +97,7 @@ describe('Peer handlePrePrepare', () => {
 
   it('Should emit a \'prepare\' event on succed', () => {
     const evt = peer.should.emit('prepare')
-    const sig = id.sign(validPayload).signature
+    const sig = id.sign(validPayload)
     peer.peers.push(id.publicKey)
     peer.handlePrePrepare(validPayload, sig, validMsg)
     return evt

@@ -4,6 +4,7 @@ import logger from 'koa-logger'
 import bodyParser from 'koa-bodyparser'
 import json from 'koa-json'
 import socketify from 'koa-websocket'
+import cors from 'koa-cors'
 
 import getPort from 'get-port'
 import websocket from 'websocket'
@@ -28,6 +29,7 @@ export class NetworkNode {
     this.app
       .use(logger())
       .use(json())
+      .use(cors())
       .use(bodyParser())
       .use(this.httpRouter().routes())
 
@@ -39,8 +41,8 @@ export class NetworkNode {
     this.peer = new Peer(this)
 
     this.peer.on('pre-prepare', (payload, sig, msg) => {
-      console.log('pre-prepare')
-      broadcast({
+      log('pre-prepare')
+      this.broadcast({
         type: 'pre-prepare',
         data: { payload, sig, msg }
       })
@@ -93,11 +95,6 @@ export class NetworkNode {
       .get('/blocks', async ctx => {
         ctx.body = this.peer.blockchain.chain
       })
-      .post('/tx', async ctx => {
-        const { msg, sig } = ctx.request.body
-        await this.peer.handleRequest(msg, Buffer.from(sig))
-        ctx.status = 200
-      })
     return router
   }
 
@@ -138,41 +135,52 @@ export class NetworkNode {
     knownPeers.forEach(createSocket)
   }
 
-  handlePeerMsg(ws, msg) {
+  handlePeerMsg(ws, req) {
     if (ws.log)
-      ws.log('sent a %s msg', msg.type)
+      ws.log('sent a %s req', req.type)
     else
-      log(`[${ws.id || ws.url}] sent a '${msg.type}' msg`)
+      log(`[${ws.id || ws.url}] sent a '${req.type}' req`)
 
-    switch (msg.type) {
+    switch (req.type) {
     case 'block':
       // Receied block for validation
-      this.peer.checkBlock(msg.data)
+      this.peer.checkBlock(req.data)
       return this.broadcast({
         type: 'validation',
         data: true,
-        id: msg.data.index
+        id: req.data.index
       })
     case 'id':
       // Replace local chain with a new one
-      ws.id = msg.data.id
-      ws.isMaster = msg.data.master
+      ws.id = req.data.id
+      ws.isMaster = req.data.master
       ws.log = log.extend(ws.id.substr(0, 8))
-      this.peers[msg.data.id] = ws
+      this.peers[req.data.id] = ws
 
       ws.log(`registered`)
       if (ws.isMaster)
         ws.log(`is masterNode`)
-      return this.peer.blockchain.replaceChain(msg.data.chain.map(Block.fromJSON))
+      return this.peer.blockchain.replaceChain(req.data.chain.map(Block.fromJSON))
     case 'blockchain':
-      // Compare chain and eventually replace it
-      return this.peer.blockchain.replaceChain(msg.data.map(Block.fromJSON))
-    case 'tx':
-      return this.peer.registerTx(msg.data)
+      return this.peer.blockchain.replaceChain(req.data.map(Block.fromJSON))
+    case 'req':
+      const { msg, sig } = req.data
+      try {
+        this.peer.handleRequest(msg, sig)
+      } catch (err) {
+        log('Error: ' + err.message)
+      }
+      break
     case 'validation':
       return this.peer.signBlock({ emitter: ws.id })
     case 'pre-prepare':
-      return this.peer.handlePrePrepare(msg.data.payload, msg.data.sig, msg.data.msg)
+      return this.peer
+        .handlePrePrepare(req.data.payload, req.data.sig, req.data.req)
+    case 'prepare':
+      return this.peer
+        .handlePrepare(req.data.payload, req.data.sig)
+    default:
+      throw new Error(`Unhandled request type '${req.type}'`)
     }
   }
 
@@ -225,7 +233,10 @@ export class NetworkNode {
         const msg = JSON.parse(data)
         this.handlePeerMsg(ctx.websocket, msg)
       } catch (err) {
-        log(`[${ctx.websocket.id}] invalid msg: ${err}`)
+        if (ctx.websocket.log)
+          ctx.websocket.log('Error: ' + err.message)
+        else
+          log(`[${ctx.websocket.id || ctx.websocket.url}] Error: ${err.message}`)
         console.log(data)
       }
     })
