@@ -15,6 +15,13 @@ import knownPeers from './known-peers'
  * { view, timestamp, client, i, valid }
  */
 
+ /**
+  * trucs a faire:
+  * hardcoder le reseau pour 1 peer
+  * factoriser ce bpft
+  * ajouter des nouveaux peers de facon synchro
+  */
+
 let log = debug('peer')
 
 export class Peer extends EventEmitter {
@@ -31,6 +38,7 @@ export class Peer extends EventEmitter {
 
 
     this.peers = []
+    this.peers[this.i] = this.id.publicKey
     this.prepareList = null
     this.commitList = null
 
@@ -44,8 +52,32 @@ export class Peer extends EventEmitter {
 
   }
 
+  handlePrePrepare(req) {
+    if (req.type === 'transaction') {
+      return this.handlePrePrepareTx(req.payload, req.sig, req.msg)
+    } else if (req.type === 'block') {
+      return this.handlePrePrepareBlock(req.block, req.sig)
+    }
+  }
+
+  handlePrepare(req) {
+    if (req.type === 'transaction') {
+      return this.handlePrepareTx(req.payload, req.sig)
+    } else if (req.type === 'block') {
+      return this.handlePrepareBlock(req.emitter)
+    }
+  }
+
+  handleCommit(req) {
+    if (req.type === 'transaction') {
+      return this.handleCommitTx(req.payload, req.sig)
+    } else if (req.type === 'block') {
+      return this.handleCommitBlock(req.block, req.emitter)
+    }
+  }
+
   handleRequest(msg, sig) {
-    log('Handleing a request')
+    log('Handling a request')
     log(msg)
     log(sig)
     if (!Identity.verifySig(msg, sig, msg.client))
@@ -63,6 +95,30 @@ export class Peer extends EventEmitter {
       return
     }
 
+    // Case for only one peer on the network
+    if (this.state.nbNodes === 1) {
+      const payload = {
+        view: this.state.view,
+        seqNb: this.state.seqNb,
+        digest: Identity.hash(msg)
+      }
+      const payloadI = {
+        ...payload,
+        i: this.i
+      }
+      // End
+
+      this.onTransaction = true
+      this.message = msg
+      this.messageSig = sig
+      this.commitList = new Set()
+      this.commitList.add(this.peers[this.i])
+      return this.handleCommit({
+        payload: payloadI,
+        sig: this.id.sign(payloadI),
+        type: 'transaction'
+      })
+    }
 
     this.message = msg
     this.messageSig = sig
@@ -77,16 +133,19 @@ export class Peer extends EventEmitter {
     this.prepareList.add(this.peers[this.i])
 
     this.onTransaction = true
-    this.emit('pre-prepare', payload, this.id.sign(payload), msg)
+    this.emit('pre-prepare', {
+      payload: payload,
+      sig: this.id.sign(payload),
+      msg: msg,
+      type: 'transaction'})
   }
 
-  handlePrePrepare(payload, sig, msg) {
+  handlePrePrepareTx(payload, sig, msg) {
     if (this.onTransaction || this.isMining) {
       this.transactionQueue.push({
         payload: payload,
         sig: sig,
         msg: msg
-
       })
       return
     }
@@ -107,11 +166,15 @@ export class Peer extends EventEmitter {
     this.prepareList = new Set()
     this.prepareList.add(this.peers[this.i])
     this.onTransaction = true
-    this.emit('prepare', payloadI, this.id.sign(payloadI))
+    this.emit('prepare', {
+      payload: payloadI,
+      sig: this.id.sign(payloadI),
+      type: 'transaction'
+    })
   }
 
 
-  handlePrepare(payload, sig) {
+  handlePrepareTx(payload, sig) {
 
     if (!Identity.verifySig(payload, sig, this.peers[payload.i]))
       throw new Error('wrong payload signature')
@@ -126,11 +189,15 @@ export class Peer extends EventEmitter {
     if (this.prepareList.size >= (2 / 3) * this.state.nbNodes) {
       this.commitList = new Set()
       this.commitList.add(this.peers[this.i])
-      this.emit('commit', payload, this.id.sign(payload))
+      this.emit('commit', {
+        payload: payload,
+        sig: this.id.sign(payload),
+        type: 'transaction'
+      })
     }
   }
 
-  handleCommit(payload, sig) {
+  handleCommitTx(payload, sig) {
     if (!Identity.verifySig(payload, sig, this.peers[payload.i]))
       throw new Error('wrong payload signature')
     if (!Identity.verifyHash(this.message, payload.digest))
@@ -199,7 +266,10 @@ export class Peer extends EventEmitter {
       sig: this.messageSig,
       valid: result.valid
     })
-    this.emit('reply', result, this.id.sign(result))
+    this.emit('reply', {
+      result: result,
+      sig: this.id.sign(result)
+    })
   }
 
 
@@ -236,7 +306,10 @@ export class Peer extends EventEmitter {
     this.prepareList.add(this.peers[this.i])
     this.onTransaction = true
 
-    this.emit('prepare-block', this.peers[this.i])
+    this.emit('prepare', {
+      emitter: this.peers[this.i],
+      type: 'block'
+    })
   }
 
   handlePrepareBlock(emitter) {
@@ -256,7 +329,10 @@ export class Peer extends EventEmitter {
       this.commitList = new Set()
       this.commitList.add(emitter)
 
-      this.emit('commit', payload, this.id.sign(payload))
+      this.emit('commit', {
+        emitter: emitter,
+        type: 'block'
+      })
     }
   }
 
@@ -291,7 +367,11 @@ export class Peer extends EventEmitter {
     this.prepareList.add(this.peers[this.i])
     this.onTransaction = true
 
-    this.emit('pre-prepare-block', this.pendingBlock, this.pendingBlockSig)
+    this.emit('pre-prepare', {
+      block: this.pendingBlock,
+      sig: this.pendingBlockSig,
+      type: 'block'
+    })
 
     setTimeout(() => {
       if (this.pendingBlock) {

@@ -48,6 +48,7 @@ describe('Peer handleRequest', () => {
   it('Should emit a \'pre-prepare\' event on succed', () => {
     const evt = peer.should.emit('pre-prepare')
     const sig = id.sign(validMsg)
+    peer.state.nbNodes = 2
     peer.handleRequest(validMsg, sig)
     return evt
   })
@@ -82,16 +83,25 @@ describe('Peer handlePrePrepare', () => {
   it('Should throw on wrong sig', () => {
     const sig = crypto.randomBytes(32)
     expect(() => {
-      peer.handlePrePrepare(validPayload, sig, validMsg)
+      peer.handlePrePrepare({
+        payload: validPayload,
+        sig: sig,
+        msg: validMsg,
+        type: 'transaction'
+      })
     }).to.throw(Error, 'Invalid payload\'s sig')
   })
 
   it('Should accept a valid sig', () => {
-    const sig = id.sign(validPayload)
-    peer.peers.push(id.publicKey)
+    const sig = peer.id.sign(validPayload)
 
     expect(() => {
-      peer.handlePrePrepare(validPayload, sig, validMsg)
+      peer.handlePrePrepare({
+        payload: validPayload,
+        sig: sig,
+        msg: validMsg,
+        type: 'transaction'
+      })
     }).not.to.throw()
   })
 })
@@ -130,29 +140,38 @@ describe('Peer handlePrepare', () => {
   })
 
   it('Should accept a valid sig', () => {
-    const sig = id.sign(validPayload)
-    peer.peers.push(id.publicKey)
+    const sig = peer.id.sign(validPayload)
     expect(() => {
-      peer.handlePrepare(validPayload, sig)
+      peer.handlePrepare({
+        payload: validPayload,
+        sig: sig,
+        type: 'transaction'
+      })
     }).not.to.throw()
   })
 
   it('Should reject msg on wrong seq number', () => {
-    peer.peers.push(id.publicKey)
     peer.state.h = 1
-    const sig = id.sign(validPayload)
+    const sig = peer.id.sign(validPayload)
 
     expect(() => {
-      peer.handlePrepare(validPayload, sig)
+      peer.handlePrepare({
+        payload: validPayload,
+        sig: sig,
+        type: 'transaction'
+      })
     }).to.throw(Error, 'sequence number is lower than h')
   })
 
 
   it('Should emit a commit event on valid request', () => {
     const evt = peer.should.emit('commit')
-    const sig = id.sign(validPayload)
-    peer.peers.push(id.publicKey)
-    peer.handlePrepare(validPayload, sig)
+    const sig = peer.id.sign(validPayload)
+    peer.handlePrepare({
+        payload: validPayload,
+        sig: sig,
+        type: 'transaction'
+      })
     return evt
   })
 })
@@ -191,28 +210,37 @@ describe('Peer handleCommit', () => {
   })
 
   it('Should accept a valid sig', () => {
-    const sig = id.sign(validPayload)
-    peer.peers.push(id.publicKey)
+    const sig = peer.id.sign(validPayload)
     expect(() => {
-      peer.handleCommit(validPayload, sig)
+      peer.handleCommit({
+        payload: validPayload,
+        sig: sig,
+        type: 'transaction'
+      })
     }).not.to.throw()
   })
 
   it('Should reject msg on wrong seq number', () => {
-    peer.peers.push(id.publicKey)
     peer.state.h = 1
-    const sig = id.sign(validPayload)
+    const sig = peer.id.sign(validPayload)
 
     expect(() => {
-      peer.handleCommit(validPayload, sig)
+      peer.handleCommit({
+        payload: validPayload,
+        sig: sig,
+        type: 'transaction'
+      })
     }).to.throw(Error, 'sequence number is lower than h')
   })
 
   it('Should emit a \'reply\' event on succed', () => {
     const evt = peer.should.emit('reply')
-    const sig = id.sign(validPayload)
-    peer.peers.push(id.publicKey)
-    peer.handleCommit(validPayload, sig)
+    const sig = peer.id.sign(validPayload)
+    peer.handleCommit({
+      payload: validPayload,
+      sig: sig,
+      type: 'transaction'
+    })
     return evt
   })
 })
@@ -228,7 +256,7 @@ describe('Peer mine', () => {
   })
 
   it('Should emit pre prepare block event', () => {
-    const evt = peer.should.emit('pre-prepare-block')
+    const evt = peer.should.emit('pre-prepare')
     peer.peers.push(id.publicKey)
     peer.mine()
     return evt
@@ -246,15 +274,17 @@ describe('Peer PrePrepareBlock', () => {
     peer = new Peer()
     id = new Identity()
     block = peer.buildNextBlock()
-    blockSig = id.sign(block)
+    blockSig = peer.id.sign(block)
   })
 
 
   it('Should emit prepare block event', () => {
-    const evt = peer.should.emit('prepare-block')
-    peer.peers.push(id.publicKey)
-    console.log(peer.peers[peer.state.view % peer.state.nbNodes])
-    peer.handlePrePrepareBlock(block, blockSig)
+    const evt = peer.should.emit('prepare')
+    peer.handlePrePrepare({
+      block: block,
+      sig: blockSig,
+      type: 'block'
+    })
     return evt
   })
 
@@ -264,13 +294,41 @@ describe('Peer PrePrepareBlock', () => {
     peer.pendingBlock = block
     peer.pendingBlockSig = sig
     expect(() => {
-      peer.handlePrePrepareBlock(block, sig)
+      peer.handlePrePrepare({
+        block: block,
+        sig: sig,
+        type: 'block'
+      })
     }).to.throw(Error, 'Block signature is invalid')
   })
 
+})
 
+describe('One peer on network', () => {
+  let peer = null
+  let id = null
+  let validMsg = {
+    tx: {
+      from: '0',
+      to: '0',
+      amount: 3
+    },
+    timestamp: Date.now(),
+    client: null,
+  }
 
+  beforeEach(() => {
+    peer = new Peer()
+    id = new Identity()
+    validMsg.client = id.publicKey
+  })
 
+  it('Should emit a \'reply\' event on succed', () => {
+    const evt = peer.should.emit('reply')
+    const sig = id.sign(validMsg)
+    peer.handleRequest(validMsg, sig)
+    return evt
+  })
 })
 
 chai.should()
