@@ -257,7 +257,6 @@ describe('Peer mine', () => {
 
   it('Should emit pre prepare block event', () => {
     const evt = peer.should.emit('pre-prepare')
-    peer.peers.push(id.publicKey)
     peer.mine()
     return evt
   })
@@ -290,7 +289,6 @@ describe('Peer PrePrepareBlock', () => {
 
   it('Should throw on wrong sig', () => {
     const sig = crypto.randomBytes(32)
-    peer.peers.push(id.publicKey)
     peer.pendingBlock = block
     peer.pendingBlockSig = sig
     expect(() => {
@@ -301,7 +299,47 @@ describe('Peer PrePrepareBlock', () => {
       })
     }).to.throw(Error, 'Block signature is invalid')
   })
+})
 
+describe('Peer PrepareBlock', () => {
+  let peer = null
+  let id = null
+  let block = null
+  let blockSig = null
+
+  beforeEach(() => {
+    peer = new Peer()
+    id = new Identity()
+    peer.prepareList = new Set()
+    block = peer.buildNextBlock()
+    blockSig = peer.id.sign(block)
+    peer.pendingBlock = block
+    peer.pendingBlockSig = blockSig
+  })
+
+
+  it('Should emit commit event', () => {
+    // peer.state.nbNodes = 3
+    const evt = peer.should.emit('commit')
+    peer.handlePrepare({
+      emitter: peer.id.publicKey,
+      type: 'block'
+    })
+    return evt
+  })
+
+  it('Should throw on wrong sig', () => {
+    const sig = crypto.randomBytes(32)
+    peer.peers.push(id.publicKey)
+    peer.pendingBlock = block
+    peer.pendingBlockSig = sig
+    expect(() => {
+      peer.handlePrePrepare({
+        emitter: peer.id.publicKey,
+        type: 'block'
+      })
+    }).to.throw(Error, 'Block signature is invalid')
+  })
 })
 
 describe('One peer on network', () => {

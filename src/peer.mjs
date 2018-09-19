@@ -36,6 +36,7 @@ export class Peer extends EventEmitter {
     this.pendingTxs = []
     this.transactionQueue = []
 
+    this.receivedStates = []
 
     this.peers = []
     this.peers[this.i] = this.id.publicKey
@@ -50,6 +51,10 @@ export class Peer extends EventEmitter {
     this.pendingBlock = null
     this.pendingBlockSig = null
 
+    this.ready = true // set to false plz
+
+    // TODO stop network until synchronized
+
   }
 
   handlePrePrepare(req) {
@@ -61,6 +66,8 @@ export class Peer extends EventEmitter {
   }
 
   handlePrepare(req) {
+    if (!this.ready)
+      return
     if (req.type === 'transaction') {
       return this.handlePrepareTx(req.payload, req.sig)
     } else if (req.type === 'block') {
@@ -69,6 +76,8 @@ export class Peer extends EventEmitter {
   }
 
   handleCommit(req) {
+    if (!this.ready)
+      return
     if (req.type === 'transaction') {
       return this.handleCommitTx(req.payload, req.sig)
     } else if (req.type === 'block') {
@@ -87,10 +96,11 @@ export class Peer extends EventEmitter {
       throw new Error('Cannot handle request: not masterNode')
       // TODO: trigger change view
 
-    if (this.onTransaction || this.isMining) {
+    if (this.onTransaction || this.isMining || !this.ready) {
       this.transactionQueue.push({
         msg: msg,
-        sig: sig
+        sig: sig,
+        type: 'transaction'
       })
       return
     }
@@ -141,11 +151,12 @@ export class Peer extends EventEmitter {
   }
 
   handlePrePrepareTx(payload, sig, msg) {
-    if (this.onTransaction || this.isMining) {
+    if (this.onTransaction || this.isMining || !this.ready) {
       this.transactionQueue.push({
         payload: payload,
         sig: sig,
-        msg: msg
+        msg: msg,
+        type: 'transaction'
       })
       return
     }
@@ -231,8 +242,11 @@ export class Peer extends EventEmitter {
       return
 
     const tx = this.transactionQueue.shift()
-    if (tx === 'mine') {
+    if (tx.type === 'mine') {
       return this.mine()
+    } else if (tx.type === 'sync') {
+      this.ready = false
+      this.newPeer(tx.key)
     }
     if (this.i === this.state.view % this.state.nbNodes) {
       return this.handleRequest(tx.msg, tx.sig)
@@ -347,6 +361,8 @@ export class Peer extends EventEmitter {
       this.pendingTxs = []
       this.pendingBlock = null
       this.pendingBlockSig = null
+      this.prepareList = null
+      this.commitList = null
       this.onTransaction = false
       this.isMining = false
       return this.handleNextTransaction()
@@ -356,7 +372,9 @@ export class Peer extends EventEmitter {
 
   mine() {
     if (this.onTransaction) {
-      this.transactionQueue.push('mine')
+      this.transactionQueue.push({
+        type: 'mine'
+      })
       return
     }
     this.isMining = true
@@ -389,5 +407,17 @@ export class Peer extends EventEmitter {
 
   stopMining() {
     clearInterval(this.minerPid)
+  }
+
+
+  newPeer(key) {
+    if (this.onTransaction || this.isMining) {
+      this.transactionQueue.push({
+        type: 'sync'
+      })
+    }
+    this.ready = false
+    this.peers[this.state.nbNodes] = key
+    this.state.nbNodes++
   }
 }
