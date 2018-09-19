@@ -33,36 +33,16 @@ describe('Peer handleRequest', () => {
   it('Should reject on wront sig', () => {
     const sig = crypto.randomBytes(32)
 
-<<<<<<< HEAD
     expect(() => {
       peer.handleRequest(validMsg, sig)
     }).to.throw(Error, 'Wrong signature on client\'s request')
-||||||| parent of 85b183e... add some tests
-    return peer.handleRequest(validMsg, sig).should.be
-      .rejectedWith(Error, 'Wrong signature on client\'s request')
-=======
-    expect(() => {
-      peer.handleRequest(validMsg, sig).to.throw(Error,
-        'Wrong signature on client\'s request')
-    })
->>>>>>> 85b183e... add some tests
   })
 
   it('Should not throw on valid sig', () => {
-<<<<<<< HEAD
     const sig = id.sign(validMsg)
     expect(() => {
       peer.handleRequest(validMsg, sig)
     }).to.not.throw()
-||||||| parent of 85b183e... add some tests
-    const sig = id.sign(validMsg).signature
-    return peer.handleRequest(validMsg, sig).should.be.fulfilled
-=======
-    const sig = id.sign(validMsg).signature
-    expect(() => {
-      peer.handleRequest(validMsg, sig).to.not.throw()
-    })
->>>>>>> 85b183e... add some tests
   })
 
   it('Should emit a \'pre-prepare\' event on succed', () => {
@@ -150,7 +130,7 @@ describe('Peer handlePrepare', () => {
   })
 
   it('Should accept a valid sig', () => {
-    const sig = id.sign(validPayload).signature
+    const sig = id.sign(validPayload)
     peer.peers.push(id.publicKey)
     expect(() => {
       peer.handlePrepare(validPayload, sig)
@@ -160,7 +140,7 @@ describe('Peer handlePrepare', () => {
   it('Should reject msg on wrong seq number', () => {
     peer.peers.push(id.publicKey)
     peer.state.h = 1
-    const sig = id.sign(validPayload).signature
+    const sig = id.sign(validPayload)
 
     expect(() => {
       peer.handlePrepare(validPayload, sig)
@@ -170,7 +150,7 @@ describe('Peer handlePrepare', () => {
 
   it('Should emit a commit event on valid request', () => {
     const evt = peer.should.emit('commit')
-    const sig = id.sign(validPayload).signature
+    const sig = id.sign(validPayload)
     peer.peers.push(id.publicKey)
     peer.handlePrepare(validPayload, sig)
     return evt
@@ -211,7 +191,7 @@ describe('Peer handleCommit', () => {
   })
 
   it('Should accept a valid sig', () => {
-    const sig = id.sign(validPayload).signature
+    const sig = id.sign(validPayload)
     peer.peers.push(id.publicKey)
     expect(() => {
       peer.handleCommit(validPayload, sig)
@@ -221,26 +201,16 @@ describe('Peer handleCommit', () => {
   it('Should reject msg on wrong seq number', () => {
     peer.peers.push(id.publicKey)
     peer.state.h = 1
-    const sig = id.sign(validPayload).signature
+    const sig = id.sign(validPayload)
 
     expect(() => {
       peer.handleCommit(validPayload, sig)
     }).to.throw(Error, 'sequence number is lower than h')
   })
 
-<<<<<<< HEAD
-  it('Should emit a \'prepare\' event on succed', () => {
-    const evt = peer.should.emit('prepare')
-    const sig = id.sign(validPayload)
-||||||| parent of 85b183e... add some tests
-  it('Should emit a \'prepare\' event on succed', () => {
-    const evt = peer.should.emit('prepare')
-    const sig = id.sign(validPayload).signature
-=======
-  it('Should emit a reply event on valid request', () => {
+  it('Should emit a \'reply\' event on succed', () => {
     const evt = peer.should.emit('reply')
-    const sig = id.sign(validPayload).signature
->>>>>>> 85b183e... add some tests
+    const sig = id.sign(validPayload)
     peer.peers.push(id.publicKey)
     peer.handleCommit(validPayload, sig)
     return evt
@@ -294,7 +264,7 @@ describe('Peer PrePrepareBlock', () => {
     peer.pendingBlock = block
     peer.pendingBlockSig = sig
     expect(() => {
-      peer.handlePrePrepareBlock(block, blockSig)
+      peer.handlePrePrepareBlock(block, sig)
     }).to.throw(Error, 'Block signature is invalid')
   })
 
