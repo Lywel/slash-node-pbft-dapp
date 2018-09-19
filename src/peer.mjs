@@ -95,22 +95,14 @@ export class Peer extends EventEmitter {
 
   handlePrepare(payload, sig) {
 
-    if (!Identity.verifySig(payload, sig, peers[payload.i])) {
-      log('ERROR: signature of payload is not correct in prepare phase')
-      return
-    }
-    if (!Identity.verifyHash(this.message, payload.digest)) {
-      log('ERROR: checksum of msg is not correct in prepare phase')
-      return
-    }
-    if (payload.view !== this.state.view) {
-      log('ERROR: state (v) is not correct in prepare phase')
-      return
-    }
-    if (payload.seqNb < this.state.h) {
-      log('ERROR: problem in sequence number')
-      return
-    }
+    if (!Identity.verifySig(payload, sig, peers[payload.i]))
+      throw new Error('signature of payload is not correct in prepare phase')
+    if (!Identity.verifyHash(this.message, payload.digest))
+      throw new Error('checksum of msg is not correct in prepare phase')
+    if (payload.view !== this.state.view)
+      throw new Error('state (v) is not correct in prepare phase')
+    if (payload.seqNb < this.state.h)
+      throw new Error('problem in sequence number')
 
     this.prepareList.add(this.peers[payload.i])
     if (this.prepareList.size >= (2 / 3) * this.state.nbNodes) {
@@ -121,22 +113,14 @@ export class Peer extends EventEmitter {
   }
 
   handleCommit(payload, sig) {
-    if (!Identity.verifySig(payload, sig, peers[payload.i])) {
-      log('ERROR: signature of payload is not correct in prepare phase')
-      return
-    }
-    if (!Identity.verifyHash(message, payload.digest)) {
-      log('ERROR: checksum of msg is not correct in commit phase')
-      return
-    }
-    if (payload.view !== this.state.view) {
-      log('ERROR: state (v) is not correct in commit phase')
-      return
-    }
-    if (payload.seqNb < this.state.h) {
-      log('ERROR: problem in sequence number')
-      return
-    }
+    if (!Identity.verifySig(payload, sig, peers[payload.i]))
+      throw new Error('signature of payload is not correct in prepare phase')
+    if (!Identity.verifyHash(message, payload.digest))
+      throw new Error('checksum of msg is not correct in commit phase')
+    if (payload.view !== this.state.view)
+      throw new Error('state (v) is not correct in commit phase')
+    if (payload.seqNb < this.state.h)
+      throw new Error('problem in sequence number')
 
     this.commitList.add(this.peers[payload.i])
     if (this.commitList.size > (1 / 3) * this.state.nbNodes) {
