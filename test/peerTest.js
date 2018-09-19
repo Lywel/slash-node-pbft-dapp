@@ -1,4 +1,4 @@
-import chai from 'chai'
+import chai, { expect } from 'chai'
 import chaiAsPromised from 'chai-as-promised'
 import chaiEvents from 'chai-events'
 
@@ -9,6 +9,7 @@ import crypto from 'crypto'
 
 chai.use(chaiAsPromised)
 chai.use(chaiEvents)
+chai.should()
 
 describe('Peer handleRequest', () => {
   let peer = null
@@ -29,7 +30,7 @@ describe('Peer handleRequest', () => {
     validMsg.client = id.publicKey
   })
 
-  it('Should reject msg on wront sig', () => {
+  it('Should reject on wront sig', () => {
     const sig = crypto.randomBytes(32)
 
     return peer.handleRequest(validMsg, sig).should.be
@@ -41,7 +42,7 @@ describe('Peer handleRequest', () => {
     return peer.handleRequest(validMsg, sig).should.be.fulfilled
   })
 
-  it('Should emit a \'pre-prepare\' event on valid request', () => {
+  it('Should emit a \'pre-prepare\' event on succed', () => {
     const evt = peer.should.emit('pre-prepare')
     const sig = id.sign(validMsg).signature
     peer.handleRequest(validMsg, sig)
@@ -75,11 +76,28 @@ describe('Peer handlePrePrepare', () => {
     validPayload.digest = Identity.hash(validMsg)
   })
 
+  it('Should throw on wrong sig', () => {
+    const sig = crypto.randomBytes(32)
+    expect(() => {
+      peer.handlePrePrepare(validPayload, sig, validMsg)
+    }).to.throw(Error, 'Invalid payload\'s sig')
+  })
+
   it('Should accept a valid sig', () => {
     const sig = id.sign(validPayload).signature
     peer.peers.push(id.publicKey)
-    return peer.handlePrePrepare(validPayload, sig, validMsg).should.be.fulfilled
-  })
-})
 
-chai.should()
+    expect(() => {
+      peer.handlePrePrepare(validPayload, sig, validMsg)
+    }).not.to.throw()
+  })
+
+  it('Should emit a \'prepare\' event on succed', () => {
+    const evt = peer.should.emit('prepare')
+    const sig = id.sign(validPayload).signature
+    peer.peers.push(id.publicKey)
+    peer.handlePrePrepare(validPayload, sig, validMsg)
+    return evt
+  })
+
+})

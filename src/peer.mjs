@@ -53,7 +53,7 @@ export class Peer extends EventEmitter {
 
     if (this.onTransaction)
       throw new Error('Network is busy and cant accept new transactions')
-    // TODO: implement queue
+      // TODO: implement queue
 
     this.message = msg
     this.messageSig = sig
@@ -71,14 +71,14 @@ export class Peer extends EventEmitter {
     this.emit('pre-prepare', payload, this.id.sign(payload), msg)
   }
 
-  async handlePrePrepare(payload, sig, msg) {
+  handlePrePrepare(payload, sig, msg) {
     if (!Identity.verifySig(payload, sig,
       this.peers[this.state.view % this.state.nbNodes]))
-      throw new Error('pre-prepare: wrong payload signature')
+      throw new Error('Invalid payload\'s sig')
     if (!Identity.verifyHash(msg ,payload.digest))
-      throw new Error('pre-prepare: wrong checksum for message')
+      throw new Error('Invalid msg\'s checksum')
     if (payload.v !== this.state.v)
-      throw new Error('pre-prepare: wrong view number')
+      throw new Error('Invalid view')
 
     this.message = msg
 
@@ -94,7 +94,6 @@ export class Peer extends EventEmitter {
 
 
   handlePrepare(payload, sig) {
-
     if (!Identity.verifySig(payload, sig, peers[payload.i]))
       throw new Error('prepare: wrong payload signature')
     if (!Identity.verifyHash(this.message, payload.digest))
