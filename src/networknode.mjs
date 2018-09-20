@@ -60,7 +60,7 @@ export class NetworkNode {
 
   peerEventHandler(type) {
     return (data) => {
-      log(type)
+      log('broadcasting %s', type)
       this.broadcast({ type, data })
     }
   }
@@ -108,6 +108,7 @@ export class NetworkNode {
           const msg = JSON.parse(evt.data)
           this.handlePeerMsg(ws, msg)
         } catch (err) {
+          console.log(err)
           if (ws.log)
             ws.log('Error: ' + err.message + '\n%O', evt.data)
           else

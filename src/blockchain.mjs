@@ -82,4 +82,9 @@ export class Blockchain {
       && chain.length > this.chain.length)
       this.chain = chain
   }
+
+  static fromJSON(json) {
+    json.chain = json.chain.map(block => Block.fromJSON(block))
+    Object.assign(new Blockchain, json)
+  }
 }

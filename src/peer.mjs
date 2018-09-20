@@ -41,8 +41,8 @@ export class Peer extends EventEmitter {
 
     this.peers = []
     this.peers[this.i] = this.id.publicKey
-    this.prepareList = null
-    this.commitList = null
+    this.prepareList = new Set()
+    this.commitList = new Set()
 
     this.onTransaction = false
     this.isMining = false
@@ -122,7 +122,7 @@ export class Peer extends EventEmitter {
       this.message = msg
       this.messageSig = sig
       this.commitList = new Set()
-      this.commitList.add(this.peers[this.i])
+      this.commitList.add(this.id.publicKey)
       return this.handleCommit({
         payload: payloadI,
         sig: this.id.sign(payloadI),
@@ -141,7 +141,7 @@ export class Peer extends EventEmitter {
     }
 
     this.prepareList = new Set()
-    this.prepareList.add(this.peers[this.i])
+    this.prepareList.add(this.id.publicKey)
 
     this.onTransaction = true
     this.emit('pre-prepare', {
@@ -177,7 +177,7 @@ export class Peer extends EventEmitter {
       i: this.i
     }
     this.prepareList = new Set()
-    this.prepareList.add(this.peers[this.i])
+    this.prepareList.add(this.id.publicKey)
     this.onTransaction = true
     this.emit('prepare', {
       payload: payloadI,
@@ -201,7 +201,7 @@ export class Peer extends EventEmitter {
     this.prepareList.add(this.peers[payload.i])
     if (this.prepareList.size >= (2 / 3) * this.state.nbNodes) {
       this.commitList = new Set()
-      this.commitList.add(this.peers[this.i])
+      this.commitList.add(this.id.publicKey)
       this.emit('commit', {
         payload: payload,
         sig: this.id.sign(payload),
@@ -227,8 +227,8 @@ export class Peer extends EventEmitter {
       this.state.h++
       this.state.seqNb++
       this.onTransaction = false
-      this.prepareList = null
-      this.commitList = null
+      this.prepareList = new Set()
+      this.commitList = new Set()
       this.message = null
       this.messageSig = null
 
@@ -319,13 +319,15 @@ export class Peer extends EventEmitter {
     this.pendingBlock = block
     this.pendingBlockSig = sig
     this.prepareList = new Set()
-    this.prepareList.add(this.peers[this.i])
+    this.prepareList.add(this.id.publicKey)
     this.onTransaction = true
+    log('prepqreList: %O', this.prepareList)
 
     this.emit('prepare', {
-      emitter: this.peers[this.i],
+      emitter: this.id.publicKey,
       type: 'block'
     })
+    this.handlePrepareBlock(this.id.publicKey)
   }
 
   handlePrepareBlock(emitter) {
@@ -340,13 +342,14 @@ export class Peer extends EventEmitter {
     }
 
     this.prepareList.add(emitter)
+    log(this.prepareList)
 
     if (this.prepareList.size >= (2 / 3) * this.state.nbNodes) {
       this.commitList = new Set()
-      this.commitList.add(emitter)
 
+      //this.handleCommit(this.id.publicKey)
       this.emit('commit', {
-        emitter: emitter,
+        emitter: this.id.publicKey,
         type: 'block'
       })
     }
@@ -357,14 +360,15 @@ export class Peer extends EventEmitter {
       return
     }
     this.commitList.add(emitter)
+    log('commitList %O', this.commitList)
     if (this.commitList.size > (1 / 3) * this.state.nbNodes) {
       this.blockchain.chain.push(this.pendingBlock)
       log('⛏ block added to blockchain')
       this.pendingTxs = []
       this.pendingBlock = null
       this.pendingBlockSig = null
-      this.prepareList = null
-      this.commitList = null
+      this.prepareList = new Set()
+      this.commitList = new Set()
       this.onTransaction = false
       this.isMining = false
       return this.handleNextTransaction()
@@ -384,7 +388,7 @@ export class Peer extends EventEmitter {
     this.pendingBlockSig = this.id.sign(this.pendingBlock)
 
     this.prepareList = new Set()
-    this.prepareList.add(this.peers[this.i])
+    this.prepareList.add(this.id.publicKey)
     this.onTransaction = true
 
     this.emit('pre-prepare', {
@@ -399,12 +403,12 @@ export class Peer extends EventEmitter {
         this.pendingBlock = null
         this.pendingBlockSig = null
       }
-    }, 1000)
+    }, 3000)
 
   }
 
   startMining() {
-    this.minerPid = setInterval(() => this.mine(), 3000)
+    this.minerPid = setInterval(() => this.mine(), 10000)
   }
 
   stopMining() {
@@ -447,6 +451,11 @@ export class Peer extends EventEmitter {
     log('statecandidate.count: %d', stateCandidate.count)
     log('target: %d', (1 / 3) * nbPeers)
     if (stateCandidate.count > (1 / 3) * nbPeers) {
+      this.state = stateCandidate.data.state
+      this.blockchain = Blockchain.fromJSON(stateCandidate.data.blockchain)
+      this.pendingTxs = stateCandidate.data.pendingTxs
+      this.transactionQueue = stateCandidate.data.transactionQueue
+      this.peers = stateCandidate.data.peers
       Object.assign(this, stateCandidate.data)
       this.i = this.peers.length - 1
       this.receivedKeys = null
