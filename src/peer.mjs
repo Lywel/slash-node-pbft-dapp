@@ -86,10 +86,8 @@ export class Peer extends EventEmitter {
     }
   }
 
-  handleRequest(msg, sig) {
+  handleRequest({ msg, sig }) {
     log('Handling a request')
-    log(msg)
-    log(sig)
     if (!Identity.verifySig(msg, sig, msg.client))
       throw new Error('Wrong signature on client\'s request')
 
@@ -97,14 +95,8 @@ export class Peer extends EventEmitter {
       throw new Error('Cannot handle request: not masterNode')
     // TODO: trigger change view
 
-    if (this.onTransaction || this.isMining || !this.ready) {
-      this.transactionQueue.push({
-        msg: msg,
-        sig: sig,
-        type: 'transaction'
-      })
-      return
-    }
+    if (this.onTransaction || this.isMining || !this.ready)
+      return this.transactionQueue.push({ msg, sig, type: 'transaction' })
 
     /* Case for only one peer on the network
     if (this.state.nbNodes === 1) {
@@ -143,17 +135,17 @@ export class Peer extends EventEmitter {
     this.prepareList = new Set()
     this.prepareList.add(this.id.publicKey)
 
-    this.onTransaction = true
     this.emit('pre-prepare', {
       payload: payload,
       sig: this.id.sign(payload),
       msg: msg,
       type: 'transaction'
     })
-    this.handlePrePrepare(payload, this.id.sign(payload), msg)
+    this.handlePrePrepareTx(payload, this.id.sign(payload), msg)
   }
 
   handlePrePrepareTx(payload, sig, msg) {
+    log('===> handlePrePrepareTx(%O)', payload)
     if (this.onTransaction || this.isMining || !this.ready) {
       this.transactionQueue.push({
         payload: payload,
@@ -180,6 +172,7 @@ export class Peer extends EventEmitter {
     this.prepareList = new Set()
     this.prepareList.add(this.peers[this.state.view % this.state.nbNodes])
     this.onTransaction = true
+
     this.emit('prepare', {
       payload: payloadI,
       sig: this.id.sign(payloadI),
@@ -190,7 +183,7 @@ export class Peer extends EventEmitter {
 
 
   handlePrepareTx(payload, sig) {
-
+    log('===> handlePrepareTx(%O)', payload)
     if (!Identity.verifySig(payload, sig, this.peers[payload.i]))
       throw new Error('wrong payload signature')
     if (!Identity.verifyHash(this.message, payload.digest))
@@ -201,8 +194,10 @@ export class Peer extends EventEmitter {
       throw new Error('sequence number is lower than h')
 
     this.prepareList.add(this.peers[payload.i])
+
     if (this.prepareList.size >= (2 / 3) * this.state.nbNodes) {
       this.commitList.add(this.id.publicKey)
+
       this.emit('commit', {
         payload: payload,
         sig: this.id.sign(payload),
@@ -213,6 +208,8 @@ export class Peer extends EventEmitter {
   }
 
   handleCommitTx(payload, sig) {
+    log('===> handleCommitTx(%O)', payload)
+
     if (!this.message)
       return
     if (!Identity.verifySig(payload, sig, this.peers[payload.i]))
@@ -251,6 +248,8 @@ export class Peer extends EventEmitter {
       return
 
     const tx = this.transactionQueue.shift()
+    log('handleNextTransaction(): %O', tx)
+
     if (tx.type === 'mine') {
       return this.mine()
     } else if (tx.type === 'sync') {
@@ -259,7 +258,7 @@ export class Peer extends EventEmitter {
     }
 
     if (this.i === this.state.view % this.state.nbNodes) {
-      return this.handleRequest(tx.msg, tx.sig)
+      return this.handleRequest(tx)
     } else {
       return this.handlePrePrepareTx(tx.payload, tx.sig, tx.msg)
     }
@@ -374,7 +373,7 @@ export class Peer extends EventEmitter {
 
     if (this.commitList.size > (1 / 3) * this.state.nbNodes) {
       this.blockchain.chain.push(this.pendingBlock)
-      log('⛏ block added to blockchain')
+      log('⛏️  Block #%d validated', this.pendingBlock.index)
       this.pendingTxs = []
       this.pendingBlock = null
       this.pendingBlockSig = null
