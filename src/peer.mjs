@@ -282,8 +282,8 @@ export class Peer extends EventEmitter {
     } else {
       this.state.accounts[tx.to] = this.state.accounts[tx.to] || 0
 
-      this.state.accounts[tx.from] -= tx.amount
-      this.state.accounts[tx.to] += tx.amount
+      this.state.accounts[tx.from] -= parseInt(tx.amount)
+      this.state.accounts[tx.to] += parseInt(tx.amount)
     }
     this.pendingTxs.push({
       request: this.message,
