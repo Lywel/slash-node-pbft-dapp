@@ -27,6 +27,7 @@ describe('Peer handleRequest', () => {
   beforeEach(() => {
     peer = new Peer()
     id = new Identity()
+    peer.ready = true
     validMsg.client = id.publicKey
   })
 
@@ -76,6 +77,7 @@ describe('Peer handlePrePrepare', () => {
   beforeEach(() => {
     peer = new Peer()
     id = new Identity()
+    peer.ready = true
     validMsg.client = id.publicKey
     validPayload.digest = Identity.hash(validMsg)
   })
@@ -128,6 +130,7 @@ describe('Peer handlePrepare', () => {
   beforeEach(() => {
     peer = new Peer()
     id = new Identity()
+    peer.ready = true
     validMsg.client = id.publicKey
     peer.message = validMsg
     validPayload.digest = Identity.hash(validMsg)
@@ -199,6 +202,7 @@ describe('Peer handleCommit', () => {
   beforeEach(() => {
     peer = new Peer()
     id = new Identity()
+    peer.ready = true
     validMsg.client = id.publicKey
     peer.message = validMsg
     validPayload.digest = Identity.hash(validMsg)
@@ -272,6 +276,7 @@ describe('Peer PrePrepareBlock', () => {
   beforeEach(() => {
     peer = new Peer()
     id = new Identity()
+    peer.ready = true
     block = peer.buildNextBlock()
     blockSig = peer.id.sign(block)
   })
@@ -310,6 +315,7 @@ describe('Peer PrepareBlock', () => {
   beforeEach(() => {
     peer = new Peer()
     id = new Identity()
+    peer.ready = true
     peer.prepareList = new Set()
     block = peer.buildNextBlock()
     blockSig = peer.id.sign(block)
@@ -358,6 +364,7 @@ describe('One peer on network', () => {
   beforeEach(() => {
     peer = new Peer()
     id = new Identity()
+    peer.ready = true
     validMsg.client = id.publicKey
   })
 

@@ -15,12 +15,12 @@ import knownPeers from './known-peers'
  * { view, timestamp, client, i, valid }
  */
 
- /**
-  * trucs a faire:
-  * hardcoder le reseau pour 1 peer
-  * factoriser ce bpft
-  * ajouter des nouveaux peers de facon synchro
-  */
+/**
+ * trucs a faire:
+ * hardcoder le reseau pour 1 peer
+ * factoriser ce bpft
+ * ajouter des nouveaux peers de facon synchro
+ */
 
 let log = debug('peer')
 
@@ -36,7 +36,8 @@ export class Peer extends EventEmitter {
     this.pendingTxs = []
     this.transactionQueue = []
 
-    this.receivedStates = []
+    this.receivedStatesHash = []
+    this.receivedKeys = new Set()
 
     this.peers = []
     this.peers[this.i] = this.id.publicKey
@@ -51,7 +52,10 @@ export class Peer extends EventEmitter {
     this.pendingBlock = null
     this.pendingBlockSig = null
 
-    this.ready = true // set to false plz
+    this.ready = false
+
+    setTimeout(this.checkIsReady.bind(this), 1000)
+
 
     // TODO stop network until synchronized
 
@@ -94,9 +98,9 @@ export class Peer extends EventEmitter {
 
     if (this.i !== this.state.view % this.state.nbNodes)
       throw new Error('Cannot handle request: not masterNode')
-      // TODO: trigger change view
+    // TODO: trigger change view
 
-    if (this.onTransaction || this.isMining || !this.ready) {
+    if (this.onTransaction || this.isMining || !this.ready) {
       this.transactionQueue.push({
         msg: msg,
         sig: sig,
@@ -147,11 +151,12 @@ export class Peer extends EventEmitter {
       payload: payload,
       sig: this.id.sign(payload),
       msg: msg,
-      type: 'transaction'})
+      type: 'transaction'
+    })
   }
 
   handlePrePrepareTx(payload, sig, msg) {
-    if (this.onTransaction || this.isMining || !this.ready) {
+    if (this.onTransaction || this.isMining || !this.ready) {
       this.transactionQueue.push({
         payload: payload,
         sig: sig,
@@ -163,7 +168,7 @@ export class Peer extends EventEmitter {
     if (!Identity.verifySig(payload, sig,
       this.peers[this.state.view % this.state.nbNodes]))
       throw new Error('Invalid payload\'s sig')
-    if (!Identity.verifyHash(msg ,payload.digest))
+    if (!Identity.verifyHash(msg, payload.digest))
       throw new Error('Invalid msg\'s checksum')
     if (payload.v !== this.state.v)
       throw new Error('Invalid view')
@@ -238,7 +243,7 @@ export class Peer extends EventEmitter {
     if (this.isMining) {
       return this.handlePrePrepareBlock(this.pendingBlock, this.pendingBlockSig)
     }
-    if (this.transactionQueue.length === 0)
+    if (this.transactionQueue.length === 0 || this.onTransaction)
       return
 
     const tx = this.transactionQueue.shift()
@@ -351,7 +356,7 @@ export class Peer extends EventEmitter {
   }
 
   handleCommitBlock(emitter) {
-    if (!this.pendingBlock ||  !this.onTransaction) {
+    if (!this.pendingBlock || !this.onTransaction) {
       return
     }
     this.commitList.add(emitter)
@@ -426,5 +431,50 @@ export class Peer extends EventEmitter {
       transactionQueue: this.transactionQueue,
       peers: this.peers
     }
+  }
+
+  checkIsReady(nbPeers = 1) {
+    if (this.ready)
+      return
+
+    const stateCandidate = Object.entries(this.receivedStatesHash)
+      .map(([key, val]) => val)
+      .sort((a, b) => b.count - a.count)[0]
+
+    if (nbPeers === 1)
+      return this.ready = true
+
+    if (stateCandidate.count > (1 / 3) * nbPeers) {
+      Object.assign(this, stateCandidate.data)
+      this.i = this.peers.length - 1
+      this.receivedKeys = null
+      this.receivedStatesHash = []
+      this.ready = true
+
+      this.emit('synchronized')
+    }
+  }
+
+  syncState(data, nbPeers) {
+    if (this.ready || this.receivedKeys.has(data.key)) {
+      return
+    }
+    this.receivedKeys.add(data.key)
+    delete data.key
+
+    const hash = Identity.hash(data)
+    this.receivedStatesHash[hash] = {
+      data,
+      count: (this.receivedStatesHash[hash] || { count: 0 }).count + 1
+    }
+
+    this.checkIsReady(nbPeers + 1) // because it's counting itself
+  }
+
+  handleSynchronized() {
+    if (this.ready)
+      return
+    this.ready = true
+    this.handleNextTransaction()
   }
 }
