@@ -43,6 +43,7 @@ export class NetworkNode {
     this.peer.on('pre-prepare', this.peerEventHandler('pre-prepare'))
     this.peer.on('prepare', this.peerEventHandler('prepare'))
     this.peer.on('commit', this.peerEventHandler('commit'))
+    this.peer.on('synchronized', this.peerEventHandler('synchronized'))
     this.peer.on('reply', data => {
       const { client } = data.result
       if (this.clients[client]) {
@@ -137,8 +138,10 @@ export class NetworkNode {
 
     switch (req.type) {
     case 'join':
+    {
       const { key } = req.data
-      const currentState = this.peer.newPeer(key)
+
+      const state = this.peer.newPeer(key)
 
       ws.id = key
       ws.log = log.extend(ws.id.substr(0, 8))
@@ -147,15 +150,26 @@ export class NetworkNode {
 
       return ws.send(JSON.stringify({
         type: 'state',
-        data: currentState
+        data: state
       }))
-
+    }
     case 'state':
-      return this.peer.syncState(req.data)
+    {
+      const { key } = req.data
+      ws.id = key
+      ws.log = log.extend(ws.id.substr(0, 8))
+      this.peers[req.data.id] = ws
+      ws.log('collaboration stared')
+      return this.peer.syncState(req.data, this.peers.length)
+    }
     case 'request':
+    {
       const { id } = req
       this.clients[id] = ws
       return this.peer.handleRequest(req.data)
+    }
+    case 'synchronized':
+      return this.peer.handleSynchronized()
     case 'pre-prepare':
       return this.peer.handlePrePrepare(req.data)
     case 'prepare':
