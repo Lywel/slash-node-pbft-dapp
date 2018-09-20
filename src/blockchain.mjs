@@ -85,6 +85,6 @@ export class Blockchain {
 
   static fromJSON(json) {
     json.chain = json.chain.map(block => Block.fromJSON(block))
-    Object.assign(new Blockchain, json)
+    return Object.assign(new Blockchain, json)
   }
 }

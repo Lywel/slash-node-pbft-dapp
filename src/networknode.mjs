@@ -59,10 +59,7 @@ export class NetworkNode {
   }
 
   peerEventHandler(type) {
-    return (data) => {
-      log('broadcasting %s', type)
-      this.broadcast({ type, data })
-    }
+    return (data) => this.broadcast({ type, data })
   }
 
   // Start the node
@@ -134,6 +131,13 @@ export class NetworkNode {
     knownPeers.forEach(createSocket)
   }
 
+  registerPeer(ws, key) {
+      ws.id = key
+      ws.log = log.extend(key.substr(0, 8))
+      this.peers[key] = ws
+      ws.log('Successfully registered')
+  }
+
   handlePeerMsg(ws, req) {
     if (ws.log)
       ws.log('sends a \'%s\'', req.type)
@@ -143,15 +147,10 @@ export class NetworkNode {
     switch (req.type) {
     case 'join':
     {
-      const { key } = req.data
+      this.registerPeer(ws, req.data.key)
+      const state = this.peer.newPeer(req.data.key)
 
-      const state = this.peer.newPeer(key)
-
-      ws.id = key
-      ws.log = log.extend(ws.id.substr(0, 8))
-      this.peers[req.data.id] = ws
-      ws.log('joined, sharing my state')
-
+      log('Sending my state to %s', req.data.key)
       return ws.send(JSON.stringify({
         type: 'state',
         data: {
@@ -162,12 +161,9 @@ export class NetworkNode {
     }
     case 'state':
     {
-      const { key } = req.data
-      ws.id = key
-      ws.log = log.extend(key.substr(0, 8))
-      this.peers[key] = ws
-      ws.log('successfully registered')
+      this.registerPeer(ws, req.data.key)
       ws.log('sent it\'s state (1/%d)', this.sentJoin)
+
       return this.peer.syncState(
         req.data,
         this.sentJoin
@@ -193,7 +189,8 @@ export class NetworkNode {
   }
 
   broadcast(data) {
-    log(`broadcasting ${data.type} to ${Object.keys(this.peers).length } peers`)
+    log(`Broadcasting ${data.type} to ${Object.keys(this.peers).length } peers`)
+    log('Broadcasting to: \n%O', Object.keys(this.peers))
 
     const bytes = JSON.stringify(data)
 

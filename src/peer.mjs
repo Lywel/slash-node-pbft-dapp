@@ -82,7 +82,7 @@ export class Peer extends EventEmitter {
     if (req.type === 'transaction') {
       return this.handleCommitTx(req.payload, req.sig)
     } else if (req.type === 'block') {
-      return this.handleCommitBlock(req.block, req.emitter)
+      return this.handleCommitBlock(req.emitter)
     }
   }
 
@@ -237,6 +237,9 @@ export class Peer extends EventEmitter {
   }
 
   handleNextTransaction() {
+    if (!this.ready)
+      return
+
     if (this.isMining) {
       return this.handlePrePrepareBlock(this.pendingBlock, this.pendingBlockSig)
     }
@@ -248,12 +251,13 @@ export class Peer extends EventEmitter {
       return this.mine()
     } else if (tx.type === 'sync') {
       this.ready = false
-      this.newPeer(tx.key)
+      return this.newPeer(tx.key)
     }
+
     if (this.i === this.state.view % this.state.nbNodes) {
       return this.handleRequest(tx.msg, tx.sig)
     } else {
-      return this.prePrepareList(tx.payload, tx.sig, tx.msg)
+      return this.handlePrePrepareTx(tx.payload, tx.sig, tx.msg)
     }
 
   }
@@ -311,26 +315,27 @@ export class Peer extends EventEmitter {
       return
     }
 
-    if (!Identity.verifySig(block, sig, this.peers[
-      this.state.view % this.state.nbNodes
-    ])) {
+    if (!Identity.verifySig(block, sig, this.peers[ this.state.view % this.state.nbNodes ]))
       throw new Error('Block signature is invalid')
-    }
+
     this.pendingBlock = block
     this.pendingBlockSig = sig
-    this.prepareList = new Set()
-    this.prepareList.add(this.id.publicKey)
     this.onTransaction = true
-    log('prepqreList: %O', this.prepareList)
+
+    this.prepareList = new Set()
+    // Add master peer signature
+    this.prepareList.add(this.peers[this.state.view % this.state.nbNodes])
 
     this.emit('prepare', {
       emitter: this.id.publicKey,
       type: 'block'
     })
+
     this.handlePrepareBlock(this.id.publicKey)
   }
 
   handlePrepareBlock(emitter) {
+    log('===> handlePrepareBlock(%o)', emitter)
     if (!this.pendingBlock || !this.pendingBlockSig) {
       throw new Error('prepare received but there is no pending block')
     }
@@ -342,12 +347,10 @@ export class Peer extends EventEmitter {
     }
 
     this.prepareList.add(emitter)
-    log(this.prepareList)
+    log('prepareList: %O', this.prepareList)
 
     if (this.prepareList.size >= (2 / 3) * this.state.nbNodes) {
-      this.commitList = new Set()
-
-      //this.handleCommit(this.id.publicKey)
+      this.handleCommit(this.id.publicKey)
       this.emit('commit', {
         emitter: this.id.publicKey,
         type: 'block'
@@ -356,11 +359,15 @@ export class Peer extends EventEmitter {
   }
 
   handleCommitBlock(emitter) {
+    log('===> handleCommitBlock(%o)', emitter)
     if (!this.pendingBlock || !this.onTransaction) {
       return
     }
+
     this.commitList.add(emitter)
+
     log('commitList %O', this.commitList)
+
     if (this.commitList.size > (1 / 3) * this.state.nbNodes) {
       this.blockchain.chain.push(this.pendingBlock)
       log('⛏ block added to blockchain')
@@ -403,12 +410,12 @@ export class Peer extends EventEmitter {
         this.pendingBlock = null
         this.pendingBlockSig = null
       }
-    }, 3000)
+    }, 1000)
 
   }
 
   startMining() {
-    this.minerPid = setInterval(() => this.mine(), 10000)
+    this.minerPid = setInterval(() => this.mine(), 3000)
   }
 
   stopMining() {
@@ -456,7 +463,6 @@ export class Peer extends EventEmitter {
       this.pendingTxs = stateCandidate.data.pendingTxs
       this.transactionQueue = stateCandidate.data.transactionQueue
       this.peers = stateCandidate.data.peers
-      Object.assign(this, stateCandidate.data)
       this.i = this.peers.length - 1
       this.receivedKeys = null
       this.receivedStatesHash = []
