@@ -8,7 +8,7 @@ export class State {
     this.view = 0
     this.seqNb = 0
     this.h = 0
-    this.nbNodes = 1
+    this.nbNodes = 1 // TODO set to 0
   }
 }
 

@@ -419,5 +419,12 @@ export class Peer extends EventEmitter {
     this.ready = false
     this.peers[this.state.nbNodes] = key
     this.state.nbNodes++
+    return {
+      state: this.state,
+      blockchain: this.blockchain,
+      pendingTxs: this.pendingTxs,
+      transactionQueue: this.transactionQueue,
+      peers: this.peers
+    }
   }
 }
