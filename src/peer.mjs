@@ -106,7 +106,7 @@ export class Peer extends EventEmitter {
       return
     }
 
-    // Case for only one peer on the network
+    /* Case for only one peer on the network
     if (this.state.nbNodes === 1) {
       const payload = {
         view: this.state.view,
@@ -129,7 +129,7 @@ export class Peer extends EventEmitter {
         type: 'transaction'
       })
     }
-    // End
+    // End */
 
     this.message = msg
     this.messageSig = sig
@@ -150,6 +150,7 @@ export class Peer extends EventEmitter {
       msg: msg,
       type: 'transaction'
     })
+    this.handlePrePrepare(payload, this.id.sign(payload), msg)
   }
 
   handlePrePrepareTx(payload, sig, msg) {
@@ -207,6 +208,7 @@ export class Peer extends EventEmitter {
         sig: this.id.sign(payload),
         type: 'transaction'
       })
+      this.handleCommitTx(payload, sig)
     }
   }
 
@@ -352,11 +354,11 @@ export class Peer extends EventEmitter {
     log('prepareList: %O', this.prepareList)
 
     if (this.prepareList.size >= (2 / 3) * this.state.nbNodes) {
-      this.handleCommit(this.id.publicKey)
       this.emit('commit', {
         emitter: this.id.publicKey,
         type: 'block'
       })
+      this.handleCommitBlock(this.id.publicKey)
     }
   }
 
@@ -392,6 +394,8 @@ export class Peer extends EventEmitter {
       })
       return
     }
+
+
     this.isMining = true
     this.pendingBlock = this.buildNextBlock()
     this.pendingBlockSig = this.id.sign(this.pendingBlock)
@@ -405,6 +409,7 @@ export class Peer extends EventEmitter {
       sig: this.pendingBlockSig,
       type: 'block'
     })
+    this.handlePrePrepareBlock(this.pendingBlock, this.pendingBlockSig)
 
     setTimeout(() => {
       if (this.pendingBlock) {
