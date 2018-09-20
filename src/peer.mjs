@@ -373,7 +373,7 @@ export class Peer extends EventEmitter {
 
 
   mine() {
-    if (this.onTransaction) {
+    if (this.onTransaction || !this.ready) {
       this.transactionQueue.push({
         type: 'mine'
       })
@@ -442,7 +442,7 @@ export class Peer extends EventEmitter {
 
     log('checkIsReady(nbPeers = %d)', nbPeers)
     if (nbPeers === 1)
-      return this.ready = true
+      return this.handleSynchronized()
 
     log('statecandidate.count: %d', stateCandidate.count)
     log('target: %d', (1 / 3) * nbPeers)
@@ -451,9 +451,9 @@ export class Peer extends EventEmitter {
       this.i = this.peers.length - 1
       this.receivedKeys = null
       this.receivedStatesHash = []
-      this.ready = true
 
       this.emit('synchronized')
+      this.handleSynchronized()
     }
   }
 
@@ -480,6 +480,9 @@ export class Peer extends EventEmitter {
     if (this.ready)
       return
     this.ready = true
+    if (this.i === this.state.view % this.state.nbNodes) {
+      this.startMining()
+    }
     this.handleNextTransaction()
   }
 }
