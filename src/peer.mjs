@@ -177,13 +177,14 @@ export class Peer extends EventEmitter {
       i: this.i
     }
     this.prepareList = new Set()
-    this.prepareList.add(this.id.publicKey)
+    this.prepareList.add(this.peers[this.state.view % this.state.nbNodes])
     this.onTransaction = true
     this.emit('prepare', {
       payload: payloadI,
       sig: this.id.sign(payloadI),
       type: 'transaction'
     })
+    this.handlePrepareTx(payloadI, this.id.sign(payloadI))
   }
 
 
@@ -200,7 +201,6 @@ export class Peer extends EventEmitter {
 
     this.prepareList.add(this.peers[payload.i])
     if (this.prepareList.size >= (2 / 3) * this.state.nbNodes) {
-      this.commitList = new Set()
       this.commitList.add(this.id.publicKey)
       this.emit('commit', {
         payload: payload,
@@ -211,6 +211,8 @@ export class Peer extends EventEmitter {
   }
 
   handleCommitTx(payload, sig) {
+    if (!this.message)
+      return
     if (!Identity.verifySig(payload, sig, this.peers[payload.i]))
       throw new Error('wrong payload signature')
     if (!Identity.verifyHash(this.message, payload.digest))
