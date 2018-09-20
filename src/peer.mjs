@@ -402,7 +402,6 @@ export class Peer extends EventEmitter {
 
     this.prepareList = new Set()
     this.prepareList.add(this.id.publicKey)
-    this.onTransaction = true
 
     this.emit('pre-prepare', {
       block: this.pendingBlock,
