@@ -56,9 +56,6 @@ export class Peer extends EventEmitter {
 
     setTimeout(this.checkIsReady.bind(this), 1000)
 
-
-    // TODO stop network until synchronized
-
   }
 
   handlePrePrepare(req) {
@@ -120,7 +117,6 @@ export class Peer extends EventEmitter {
         ...payload,
         i: this.i
       }
-      // End
 
       this.onTransaction = true
       this.message = msg
@@ -133,6 +129,7 @@ export class Peer extends EventEmitter {
         type: 'transaction'
       })
     }
+    // End
 
     this.message = msg
     this.messageSig = sig
@@ -424,6 +421,8 @@ export class Peer extends EventEmitter {
     this.ready = false
     this.peers[this.state.nbNodes] = key
     this.state.nbNodes++
+    setTimeout(this.handleSynchronized.bind(this), 1000)
+
     return {
       state: this.state,
       blockchain: this.blockchain,
@@ -456,9 +455,12 @@ export class Peer extends EventEmitter {
   }
 
   syncState(data, nbPeers) {
-    if (this.ready || this.receivedKeys.has(data.key)) {
+    if (this.ready)
+      return this.emit('synchronized')
+
+    if (this.receivedKeys.has(data.key))
       return
-    }
+
     this.receivedKeys.add(data.key)
     delete data.key
 
