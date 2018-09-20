@@ -203,6 +203,13 @@ export class NetworkNode {
 
   // Socket on connect
   async socketHandler(ctx, next) {
+    ctx.websocket.send(JSON.stringify({
+      type: 'info',
+      data: {
+        state: this.peer.state,
+        key: this.peer.id.publicKey
+      }
+    }))
     // On message
     ctx.websocket.on('message', data => {
       try {
