@@ -440,9 +440,12 @@ export class Peer extends EventEmitter {
       .map(([key, val]) => val)
       .sort((a, b) => b.count - a.count)[0]
 
+    log('checkIsReady(nbPeers = %d)', nbPeers)
     if (nbPeers === 1)
       return this.ready = true
 
+    log('statecandidate.count: %d', stateCandidate.count)
+    log('target: %d', (1 / 3) * nbPeers)
     if (stateCandidate.count > (1 / 3) * nbPeers) {
       Object.assign(this, stateCandidate.data)
       this.i = this.peers.length - 1

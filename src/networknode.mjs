@@ -94,6 +94,8 @@ export class NetworkNode {
 
   // Find the other nodes of the network
   peerDiscovery() {
+    this.sentJoin = 0
+
     const createSocket = (address) => {
       // Dont connect to yourself
       if (address === `localhost:${this.port}`)
@@ -115,6 +117,7 @@ export class NetworkNode {
 
       ws.onopen = () => {
         log('new websocket connection on \'%s\'', ws.url)
+        this.sentJoin++
         ws.send(JSON.stringify({
           type: 'join',
           data: { key: this.peer.id.publicKey }
@@ -146,21 +149,28 @@ export class NetworkNode {
       ws.id = key
       ws.log = log.extend(ws.id.substr(0, 8))
       this.peers[req.data.id] = ws
-      ws.log('Has joined the network')
+      ws.log('joined, sharing my state')
 
       return ws.send(JSON.stringify({
         type: 'state',
-        data: state
+        data: {
+          ...state,
+          key: this.peer.id.publicKey
+        }
       }))
     }
     case 'state':
     {
       const { key } = req.data
       ws.id = key
-      ws.log = log.extend(ws.id.substr(0, 8))
-      this.peers[req.data.id] = ws
-      ws.log('collaboration stared')
-      return this.peer.syncState(req.data, this.peers.length)
+      ws.log = log.extend(key.substr(0, 8))
+      this.peers[key] = ws
+      ws.log('successfully registered')
+      ws.log('sent it\'s state (1/%d)', this.sentJoin)
+      return this.peer.syncState(
+        req.data,
+        this.sentJoin
+      )
     }
     case 'request':
     {
@@ -195,8 +205,6 @@ export class NetworkNode {
 
   // Socket on connect
   async socketHandler(ctx, next) {
-    log('new websocket connection')
-
     // On message
     ctx.websocket.on('message', data => {
       try {
