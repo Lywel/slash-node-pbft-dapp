@@ -124,6 +124,7 @@ export class NetworkNode {
 
       ws.onclose = () => {
         log('closing connection')
+        this.peer.handlePeerDisconnect(ws.id)
         delete this.peers[ws.id]
       }
     }
@@ -184,7 +185,7 @@ export class NetworkNode {
     case 'commit':
       return this.peer.handleCommit(req.data)
     case 'info':
-      log('\n\n ==== UNHANDLED CASE BY PEERS ==== \n\n')
+      // Peers dont care about infos
       break
     default:
       throw new Error(`Unhandled request type '${req.type}'`)
@@ -232,7 +233,10 @@ export class NetworkNode {
         ctx.websocket.log('closing connection')
       else
         log('closing connection')
-      delete this.peers[ctx.websocket.id]
+      if (this.peers[ctx.websocket.id]) {
+        this.peer.handlePeerDisconnect(ws.id)
+        delete this.peers[ctx.websocket.id]
+      }
     })
   }
 }
