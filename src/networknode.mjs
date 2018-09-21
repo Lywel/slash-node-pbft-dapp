@@ -152,7 +152,7 @@ export class NetworkNode {
       this.registerPeer(ws, req.data.key)
       const state = this.peer.newPeer(req.data.key)
 
-      log('Sending my state to %s', req.data.key)
+      log('Sending my state to %O', req.data)
       return ws.send(JSON.stringify({
         type: 'state',
         data: {

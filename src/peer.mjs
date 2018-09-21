@@ -34,6 +34,7 @@ export class Peer extends EventEmitter {
     this.blockchain = new Blockchain()
     this.state = new State()
     this.i = 0
+    this.nextI = 0
 
     this.pendingTxs = []
     this.transactionQueue = []
@@ -129,13 +130,28 @@ export class Peer extends EventEmitter {
         msg: msg,
         type: 'transaction'
       })
+      this.transactionDic[payload.seqNb] = {}
+      this.transactionDic[payload.seqNb].prepareList = new Set()
+      this.transactionDic[payload.seqNb].commitList = new Set()
+      this.transactionDic[payload.seqNb].message = msg
+      this.transactionDic[payload.seqNb].messageSig = payload.digest
+      this.state.seqNb++
+
       return
     }
-    this.state.seqNb++
-    this.transactionDic[payload.seqNb] = {}
 
-    this.transactionDic[payload.seqNb].prepareList = new Set()
-    this.transactionDic[payload.seqNb].commitList = new Set()
+    if (!this.transactionDic[payload.seqNb]) {
+      console.log('ENTER CONDITION OK')
+      this.transactionDic[payload.seqNb] = {}
+
+      this.transactionDic[payload.seqNb].prepareList = new Set()
+      this.transactionDic[payload.seqNb].commitList = new Set()
+
+      this.transactionDic[payload.seqNb].message = msg
+      this.transactionDic[payload.seqNb].messageSig = payload.digest
+      this.state.seqNb++
+
+    }
     if (!Identity.verifySig(payload, sig,
       this.peers[this.state.view % this.state.nbNodes]))
       throw new Error('Invalid payload\'s sig')
@@ -144,8 +160,7 @@ export class Peer extends EventEmitter {
     if (payload.v !== this.state.v)
       throw new Error('Invalid view')
 
-    this.transactionDic[payload.seqNb].message = msg
-    this.transactionDic[payload.seqNb].messageSig = msg
+
 
     const payloadI = {
       ...payload,
@@ -166,17 +181,22 @@ export class Peer extends EventEmitter {
     log('===> handlePrepareTx(%O)', payload)
     if (!Identity.verifySig(payload, sig, this.peers[payload.i]))
       throw new Error('wrong payload signature')
-    if (!Identity.verifyHash(this.transactionDic[payload.seqNb].message, payload.digest))
+    if (!Identity.verifyHash(this.transactionDic[payload.seqNb].message, payload.digest)) {
+      console.log('dic at index', payload.seqNb)
+      console.log(this.transactionDic[payload.seqNb])
+      console.log('digest:')
+      console.log(payload.digest)
       throw new Error('wrong checksum for message')
+    }
     if (payload.view !== this.state.view)
       throw new Error('wrong view number')
     if (payload.seqNb < this.state.h)
       throw new Error('sequence number is lower than h')
 
-      this.transactionDic[payload.seqNb].prepareList.add(this.peers[payload.i])
+    this.transactionDic[payload.seqNb].prepareList.add(this.peers[payload.i])
 
     if (this.transactionDic[payload.seqNb].prepareList.size >= (2 / 3)
-        * this.state.nbNodes) {
+      * this.state.nbNodes) {
 
       this.transactionDic[payload.seqNb].commitList.add(this.id.publicKey)
       let payloadI = { ...payload }
@@ -206,9 +226,9 @@ export class Peer extends EventEmitter {
     if (payload.seqNb < this.state.h)
       throw new Error('sequence number is lower than h')
 
-      this.transactionDic[payload.seqNb].commitList.add(this.peers[payload.i])
+    this.transactionDic[payload.seqNb].commitList.add(this.peers[payload.i])
     if (this.transactionDic[payload.seqNb].commitList.size > (1 / 3)
-        * this.state.nbNodes) {
+      * this.state.nbNodes) {
 
       this.replyToClient(this.transactionDic[payload.seqNb])
       this.state.h++
@@ -296,8 +316,7 @@ export class Peer extends EventEmitter {
       return
     }
 
-    if (!Identity.verifySig(block, sig, this.peers[ this.state.view % this.state.nbNodes ]))
-    {
+    if (!Identity.verifySig(block, sig, this.peers[this.state.view % this.state.nbNodes])) {
       console.log('')
       throw new Error('Block signature is invalid')
     }
@@ -325,8 +344,18 @@ export class Peer extends EventEmitter {
     }
 
     if (!this.checkBlock(this.pendingBlock)) {
+      console.log('peer pending block\n')
+      console.dir(this.pendingBlock, { color: true, depth: 3 })
+      console.log('-----------------')
+      console.log('calculated block\n')
+      console.dir(this.buildNextBlock(), { color: true, depth: 3 })
+      console.log('blockchain len:', this.blockchain.chain.length)
+
+
       this.pendingBlock = null
       this.pendingBlockSig = null
+      this.isMining &= false
+      this.onTransaction = false
       throw new Error('Block verification failed: hashs don\'t match')
     }
 
@@ -400,6 +429,7 @@ export class Peer extends EventEmitter {
 
   startMining() {
     this.minerPid = setInterval(() => this.mine(), 3000)
+    logDebug('START MINING')
   }
 
   stopMining() {
@@ -416,7 +446,10 @@ export class Peer extends EventEmitter {
     }
     logDebug('------ PEERS PLUS PLUS ------')
     this.ready = false
-    this.peers[this.state.nbNodes] = key
+    this.nextI++
+    logDebug('nextI = %d', this.nextI)
+    this.peers[this.nextI] = key
+
     this.state.nbNodes++
     setTimeout(this.handleSynchronized.bind(this), 1000)
     console.log('peer number', this.i)
@@ -430,7 +463,8 @@ export class Peer extends EventEmitter {
       peers: this.peers,
       pendingBlock: this.pendingBlock ? Object.assign({}, this.pendingBlock) : null,
       pendingBlockSig: this.pendingBlockSig,
-      isMining: this.isMining
+      isMining: this.isMining,
+      nextI: this.nextI
     }
   }
 
@@ -455,13 +489,14 @@ export class Peer extends EventEmitter {
       this.pendingTxs = stateCandidate.data.pendingTxs
       this.transactionQueue = stateCandidate.data.transactionQueue
       this.peers = stateCandidate.data.peers
+      this.nextI = stateCandidate.data.nextI
       if (!stateCandidate.data.pendingBlock)
         this.pendingBlock = null
       else
         this.pendingBlock = Block.fromJSON(stateCandidate.data.pendingBlock)
       this.pendingBlockSig = stateCandidate.data.pendingBlockSig
       this.isMining = this.isMining
-      this.i = this.peers.length - 1
+      this.i = this.nextI
       logDebug('My new i is: %d', this.i)
       this.receivedKeys = null
       this.receivedStatesHash = []
@@ -484,7 +519,7 @@ export class Peer extends EventEmitter {
     this.receivedKeys.add(data.key)
     delete data.key
 
-    console.dir(data, {color: true, depth: 5})
+    console.dir(data, { color: true, depth: 2 })
     console.log('hash: ', Identity.hash(data))
     console.log('')
 
@@ -501,7 +536,7 @@ export class Peer extends EventEmitter {
     if (this.ready)
       return
     this.ready = true
-    if (this.i === this.state.view % this.state.nbNodes) {
+    if (!this.minerPid && this.i === this.state.view % this.state.nbNodes) {
       this.startMining()
     }
     this.handleNextTransaction()
