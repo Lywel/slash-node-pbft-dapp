@@ -3,6 +3,7 @@ import debug from 'debug'
 import { Identity } from './identity'
 import { Blockchain, Block, State } from './blockchain';
 import knownPeers from './known-peers'
+import { debuglog } from 'util';
 
 /**
  * formats:
@@ -23,6 +24,7 @@ import knownPeers from './known-peers'
  */
 
 let log = debug('peer')
+let logDebug = debug('debug')
 
 export class Peer extends EventEmitter {
   constructor(network) {
@@ -300,7 +302,7 @@ export class Peer extends EventEmitter {
       this.blockchain.chain.length,
       this.pendingTxs,
       this.blockchain.lastBlock().hash,
-      this.state
+      Object.assign({}, this.state)
     )
   }
 
@@ -341,6 +343,8 @@ export class Peer extends EventEmitter {
   handlePrepareBlock(emitter) {
     log('===> handlePrepareBlock(%o)', emitter)
     if (!this.pendingBlock || !this.pendingBlockSig) {
+      this.prepareList.add(emitter)
+      return logDebug('prepare received but there is no pending block')
       throw new Error('prepare received but there is no pending block')
     }
 
@@ -374,6 +378,13 @@ export class Peer extends EventEmitter {
 
     if (this.commitList.size > (1 / 3) * this.state.nbNodes) {
       this.blockchain.chain.push(this.pendingBlock)
+      logDebug('-------')
+      logDebug(this.peers)
+      logDebug('peer state:')
+      logDebug(this.state)
+      logDebug('pending block state:')
+      logDebug(this.pendingBlock.state)
+      logDebug('-------')
       log('⛏️  Block #%d validated', this.pendingBlock.index)
       this.pendingTxs = []
       this.pendingBlock = null
@@ -382,6 +393,7 @@ export class Peer extends EventEmitter {
       this.commitList = new Set()
       this.onTransaction = false
       this.isMining = false
+      logDebug('mine block with %d peers', this.state.nbNodes)
       return this.handleNextTransaction()
     }
   }
@@ -402,6 +414,7 @@ export class Peer extends EventEmitter {
     setTimeout(() => {
       if (this.pendingBlock) {
         log('❌ block invalid\n', this.pendingBlock)
+        logDebug('❌ block invalid\n', this.pendingBlock)
         this.pendingBlock = null
         this.pendingBlockSig = null
       }
@@ -425,18 +438,21 @@ export class Peer extends EventEmitter {
       })
       return
     }
+    logDebug('------ PEERS PLUS PLUS ------')
     this.ready = false
     this.peers[this.state.nbNodes] = key
     this.state.nbNodes++
     setTimeout(this.handleSynchronized.bind(this), 1000)
+    console.log('peer number', this.i)
+
 
     return {
-      state: this.state,
-      blockchain: this.blockchain,
+      state: this.state ? Object.assign({}, this.state) : null,
+      blockchain: this.blockchain ? Object.assign({}, this.blockchain) : null,
       pendingTxs: this.pendingTxs,
       transactionQueue: this.transactionQueue,
       peers: this.peers,
-      pendingBlock: this.pendingBlock,
+      pendingBlock: this.pendingBlock ? Object.assign({}, this.pendingBlock) : null,
       pendingBlockSig: this.pendingBlockSig,
       isMining: this.isMining
     }
@@ -470,6 +486,7 @@ export class Peer extends EventEmitter {
       this.pendingBlockSig = stateCandidate.data.pendingBlockSig
       this.isMining = this.isMining
       this.i = this.peers.length - 1
+      logDebug('My new i is: %d', this.i)
       this.receivedKeys = null
       this.receivedStatesHash = []
 
@@ -479,18 +496,21 @@ export class Peer extends EventEmitter {
   }
 
   syncState(data, nbPeers) {
-    console.log('')
-    console.dir(data, {color: true, depth: 4})
-    console.log('hash: ', Identity.hash(data))
-    console.log('')
+
     if (this.ready)
       return this.emit('synchronized')
 
+    console.log('reveived key:', data.key)
+    console.log('set of keys:', this.receivedKeys)
     if (this.receivedKeys.has(data.key))
       return
 
     this.receivedKeys.add(data.key)
     delete data.key
+
+    console.dir(data, {color: true, depth: 5})
+    console.log('hash: ', Identity.hash(data))
+    console.log('')
 
     const hash = Identity.hash(data)
     this.receivedStatesHash[hash] = {
