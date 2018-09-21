@@ -43,16 +43,17 @@ export class Peer extends EventEmitter {
 
     this.peers = []
     this.peers[this.i] = this.id.publicKey
-    this.prepareList = new Set()
-    this.commitList = new Set()
+    this.transactionDic = []
+    //this.prepareListsTx = []
+    //this.commitListsTx = []
 
     this.prepareListBlock = new Set()
     this.commitListBlock = new Set()
 
     this.onTransaction = false
     this.isMining = false
-    this.message = null
-    this.messageSig = null
+    //this.message = null
+    //this.messageSig = null
 
     this.pendingBlock = null
     this.pendingBlockSig = null
@@ -101,17 +102,14 @@ export class Peer extends EventEmitter {
     // TODO: trigger change view
 
 
-    this.message = msg
-    this.messageSig = sig
+    //this.message = msg
+    //this.messageSig = sig
 
     const payload = {
       view: this.state.view,
       seqNb: this.state.seqNb,
       digest: Identity.hash(msg)
     }
-
-    this.prepareList = new Set()
-    this.prepareList.add(this.id.publicKey)
 
     this.emit('pre-prepare', {
       payload: payload,
@@ -133,6 +131,11 @@ export class Peer extends EventEmitter {
       })
       return
     }
+    this.state.seqNb++
+    this.transactionDic[payload.seqNb] = {}
+
+    this.transactionDic[payload.seqNb].prepareList = new Set()
+    this.transactionDic[payload.seqNb].commitList = new Set()
     if (!Identity.verifySig(payload, sig,
       this.peers[this.state.view % this.state.nbNodes]))
       throw new Error('Invalid payload\'s sig')
@@ -141,14 +144,13 @@ export class Peer extends EventEmitter {
     if (payload.v !== this.state.v)
       throw new Error('Invalid view')
 
-    this.message = msg
+    this.transactionDic[payload.seqNb].message = msg
+    this.transactionDic[payload.seqNb].messageSig = msg
 
     const payloadI = {
       ...payload,
       i: this.i
     }
-    this.prepareList = new Set()
-    this.prepareList.add(this.peers[this.state.view % this.state.nbNodes])
     this.onTransaction = true
 
     this.emit('prepare', {
@@ -164,52 +166,55 @@ export class Peer extends EventEmitter {
     log('===> handlePrepareTx(%O)', payload)
     if (!Identity.verifySig(payload, sig, this.peers[payload.i]))
       throw new Error('wrong payload signature')
-    if (!Identity.verifyHash(this.message, payload.digest))
+    if (!Identity.verifyHash(this.transactionDic[payload.seqNb].message, payload.digest))
       throw new Error('wrong checksum for message')
     if (payload.view !== this.state.view)
       throw new Error('wrong view number')
     if (payload.seqNb < this.state.h)
       throw new Error('sequence number is lower than h')
 
-    this.prepareList.add(this.peers[payload.i])
+      this.transactionDic[payload.seqNb].prepareList.add(this.peers[payload.i])
 
-    if (this.prepareList.size >= (2 / 3) * this.state.nbNodes) {
-      this.commitList.add(this.id.publicKey)
+    if (this.transactionDic[payload.seqNb].prepareList.size >= (2 / 3)
+        * this.state.nbNodes) {
+
+      this.transactionDic[payload.seqNb].commitList.add(this.id.publicKey)
+      let payloadI = { ...payload }
+      payloadI.i = this.i
 
       this.emit('commit', {
-        payload: payload,
-        sig: this.id.sign(payload),
+        payload: payloadI,
+        sig: this.id.sign(payloadI),
         type: 'transaction'
       })
-      this.handleCommitTx(payload, sig)
+
+      this.handleCommitTx(payloadI, this.id.sign(payloadI))
     }
   }
 
   handleCommitTx(payload, sig) {
     log('===> handleCommitTx(%O)', payload)
 
-    if (!this.message)
+    if (!this.transactionDic[payload.seqNb].message)
       return
     if (!Identity.verifySig(payload, sig, this.peers[payload.i]))
       throw new Error('wrong payload signature')
-    if (!Identity.verifyHash(this.message, payload.digest))
+    if (!Identity.verifyHash(this.transactionDic[payload.seqNb].message, payload.digest))
       throw new Error('wrong checksum for message')
     if (payload.view !== this.state.view)
       throw new Error('wrong view number')
     if (payload.seqNb < this.state.h)
       throw new Error('sequence number is lower than h')
 
-    this.commitList.add(this.peers[payload.i])
-    if (this.commitList.size > (1 / 3) * this.state.nbNodes) {
+      this.transactionDic[payload.seqNb].commitList.add(this.peers[payload.i])
+    if (this.transactionDic[payload.seqNb].commitList.size > (1 / 3)
+        * this.state.nbNodes) {
 
-      this.replyToClient()
+      this.replyToClient(this.transactionDic[payload.seqNb])
       this.state.h++
-      this.state.seqNb++
       this.onTransaction = false
-      this.prepareList = new Set()
-      this.commitList = new Set()
-      this.message = null
-      this.messageSig = null
+      this.transactionDic[payload.seqNb].message = null
+      this.transactionDic[payload.seqNb].messageSig = null
 
       this.handleNextTransaction()
     }
@@ -234,24 +239,20 @@ export class Peer extends EventEmitter {
       return this.newPeer(tx.key)
     }
 
-    if (this.i === this.state.view % this.state.nbNodes) {
-      return this.handleRequest(tx)
-    } else {
-      return this.handlePrePrepareTx(tx.payload, tx.sig, tx.msg)
-    }
+    return this.handlePrePrepareTx(tx.payload, tx.sig, tx.msg)
 
   }
 
-  replyToClient() {
+  replyToClient(data) {
     let result = {
       view: this.view,
-      timestamp: this.message.timestamp,
-      client: this.message.client,
+      timestamp: data.message.timestamp,
+      client: data.message.client,
       i: this.i,
       valid: true
     }
 
-    const tx = this.message.tx
+    const tx = data.message.tx
     if (!this.state.accounts[tx.from]
       || this.state.accounts[tx.from] - tx.amount < 0) {
       result.valid = false
@@ -262,8 +263,8 @@ export class Peer extends EventEmitter {
       this.state.accounts[tx.to] += parseInt(tx.amount)
     }
     this.pendingTxs.push({
-      request: this.message,
-      sig: this.messageSig,
+      request: data.message,
+      sig: data.messageSig,
       valid: result.valid
     })
     this.emit('reply', {

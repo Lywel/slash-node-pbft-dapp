@@ -219,6 +219,7 @@ export class NetworkNode {
         const msg = JSON.parse(data)
         this.handlePeerMsg(ctx.websocket, msg)
       } catch (err) {
+        console.log(err)
         if (ctx.websocket.log)
           ctx.websocket.log('Error: ' + err.message + '\n%O', data)
         else

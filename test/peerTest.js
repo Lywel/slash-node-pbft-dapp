@@ -35,14 +35,14 @@ describe('Peer handleRequest', () => {
     const sig = crypto.randomBytes(32)
 
     expect(() => {
-      peer.handleRequest(validMsg, sig)
+      peer.handleRequest({ msg: validMsg, sig: sig })
     }).to.throw(Error, 'Wrong signature on client\'s request')
   })
 
   it('Should not throw on valid sig', () => {
     const sig = id.sign(validMsg)
     expect(() => {
-      peer.handleRequest(validMsg, sig)
+      peer.handleRequest({ msg: validMsg, sig: sig })
     }).to.not.throw()
   })
 
@@ -50,7 +50,7 @@ describe('Peer handleRequest', () => {
     const evt = peer.should.emit('pre-prepare')
     const sig = id.sign(validMsg)
     peer.state.nbNodes = 2
-    peer.handleRequest(validMsg, sig)
+    peer.handleRequest({ msg: validMsg, sig: sig })
     return evt
   })
 })
@@ -132,13 +132,15 @@ describe('Peer handlePrepare', () => {
     id = new Identity()
     peer.ready = true
     validMsg.client = id.publicKey
-    peer.message = validMsg
+    peer.transactionDic[0] = {}
+    peer.transactionDic[0].message = validMsg
     validPayload.digest = Identity.hash(validMsg)
     validPayload.i = 0
     peer.state.nbNodes = 4
-    peer.prepareList = new Set()
-    peer.prepareList.add('0')
-    peer.prepareList.add('1')
+    peer.transactionDic[0].prepareList = new Set()
+    peer.transactionDic[0].commitList = new Set()
+    peer.transactionDic[0].prepareList.add('0')
+    peer.transactionDic[0].prepareList.add('1')
 
   })
 
@@ -204,12 +206,13 @@ describe('Peer handleCommit', () => {
     id = new Identity()
     peer.ready = true
     validMsg.client = id.publicKey
-    peer.message = validMsg
+    peer.transactionDic[0] = {}
+    peer.transactionDic[0].message = validMsg
     validPayload.digest = Identity.hash(validMsg)
     validPayload.i = 0
     peer.state.nbNodes = 4
-    peer.commitList = new Set()
-    peer.commitList.add('0')
+    peer.transactionDic[0].commitList = new Set()
+    peer.transactionDic[0].commitList.add('0')
 
   })
 
@@ -371,7 +374,7 @@ describe('One peer on network', () => {
   it('Should emit a \'reply\' event on succed', () => {
     const evt = peer.should.emit('reply')
     const sig = id.sign(validMsg)
-    peer.handleRequest(validMsg, sig)
+    peer.handleRequest({ msg:validMsg, sig: sig} )
     return evt
   })
 })
