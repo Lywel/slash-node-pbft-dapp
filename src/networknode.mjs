@@ -183,6 +183,9 @@ export class NetworkNode {
       return this.peer.handlePrepare(req.data)
     case 'commit':
       return this.peer.handleCommit(req.data)
+    case 'info':
+      log('\n\n ==== UNHANDLED CASE BY PEERS ==== \n\n')
+      break
     default:
       throw new Error(`Unhandled request type '${req.type}'`)
     }
