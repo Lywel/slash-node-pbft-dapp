@@ -508,6 +508,6 @@ export class Peer extends EventEmitter {
   }
 
   handlePeerDisconnect() {
-    this.state.nbPeers--
+    this.state.nbNodes--
   }
 }

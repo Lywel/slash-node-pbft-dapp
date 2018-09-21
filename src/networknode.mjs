@@ -124,7 +124,8 @@ export class NetworkNode {
 
       ws.onclose = () => {
         log('closing connection')
-        this.peer.handlePeerDisconnect(ws.id)
+        if (this.peers[ws.id])
+          this.peer.handlePeerDisconnect()
         delete this.peers[ws.id]
       }
     }
@@ -234,7 +235,7 @@ export class NetworkNode {
       else
         log('closing connection')
       if (this.peers[ctx.websocket.id]) {
-        this.peer.handlePeerDisconnect(ws.id)
+        this.peer.handlePeerDisconnect()
         delete this.peers[ctx.websocket.id]
       }
     })
