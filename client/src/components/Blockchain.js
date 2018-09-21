@@ -13,6 +13,8 @@ import {
   ModalHeader,
   Button } from 'reactstrap'
 
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+
 import { fetchBlocks } from '../actions/index'
 
 class Blockchain extends Component {
@@ -21,7 +23,7 @@ class Blockchain extends Component {
     this.state = {
       selectedBlock: 0,
       modal: false,
-      searchWord: ''
+      searchWord: 'tx'
     }
   }
 
@@ -125,7 +127,11 @@ class Blockchain extends Component {
                         (new Date(data.request.timestamp))
                           .toLocaleString('en-GB', { timeZone: 'UTC' })
                       }</td>
-                      <td>{ data.valid ? 'OK' : 'KO' }</td>
+                      <td>{
+                        data.valid
+                          ? <FontAwesomeIcon icon="check-circle" />
+                          : <FontAwesomeIcon icon="times-circle" />
+                      }</td>
                     </tr>
                   ))
 
