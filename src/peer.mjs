@@ -549,6 +549,9 @@ export class Peer extends EventEmitter {
     }
     delete this.peers[this.state.nbNodes - 1]
     this.state.nbNodes--
+
+    if (this.i === this.view % this.nbNodes && !this.minerPid)
+      this.startMining()
   }
 
   applyDemurrage() {
