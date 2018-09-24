@@ -30,7 +30,8 @@ class TxCreator extends Component {
       txValid: false,
       txInvalid: false,
       msg: false,
-      sig: false
+      sig: false,
+      reqTimeout: null
     }
   }
 
@@ -57,6 +58,7 @@ class TxCreator extends Component {
               this.setState({ txValid: true })
             else
               this.setState({ txInvalid: true })
+            clearTimeout(this.state.reqTimout)
           }, 800)
         }
         break
@@ -81,7 +83,7 @@ class TxCreator extends Component {
   }
 
   sendRequest = () => {
-    if (this.state.ready) {
+    if (this.state.ready && !this.state.msg) {
       const msg = {
         tx: {
           from: this.state.txFrom,
@@ -104,6 +106,13 @@ class TxCreator extends Component {
       }))
 
       setTimeout(() => this.setState({ txSent: true }), 400)
+
+      this.setState({
+        reqTimeout: setTimeout(() => {
+          if (this.state.msg)
+            this.setState({ txInvalid: true })
+        }, 2000)
+      })
     }
   }
 
@@ -144,7 +153,7 @@ class TxCreator extends Component {
               Transaction accepted. It should be visible in the next block.
             </Alert>
             <Alert isOpen={ this.state.txInvalid } color='danger'>
-              Transaction refused. It should be visible in the next block.
+              Transaction refused.
             </Alert>
         </ModalBody>
       </Modal>
