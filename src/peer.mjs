@@ -94,8 +94,12 @@ export class Peer extends EventEmitter {
 
   handleRequest({ msg, sig }) {
     log('Handling a request')
-    if (!Identity.verifySig(msg, sig, msg.client))
-      throw new Error('Wrong signature on client\'s request')
+    if (!Identity.verifySig(msg, sig, msg.tx.from) && msg.tx.from !== '0') {
+      this.onTransaction = false
+      this.handleNextTransaction()
+      log('Wrong signature on client\'s request')
+      return
+    }
 
     if (this.i !== this.state.view % this.state.nbNodes)
       throw new Error('Cannot handle request: not masterNode')
