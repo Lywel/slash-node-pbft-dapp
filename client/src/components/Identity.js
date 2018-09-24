@@ -9,6 +9,8 @@ import {
   Button,
   } from 'reactstrap'
 
+import { fetchBlocks } from '../actions/index'
+
 class Identity extends Component {
 
   savePrivateKey = () => {
@@ -50,10 +52,18 @@ class Identity extends Component {
   }
 
   render() {
+    const block = this.props.blocks[this.props.blocks.length - 1]
+    let balance = 0
+    if (block)
+      balance = block.state.accounts[this.props.id.publicKey] || 0
+
     return (
       <div>
         <h2>Identity</h2>
         <ListGroup>
+          <ListGroupItem>Blance{' '}
+            <Badge> { balance } </Badge>
+          </ListGroupItem>
           <ListGroupItem>Public{' '}
             <Badge>{ this.props.id.publicKey }</Badge>
           </ListGroupItem>
@@ -78,9 +88,13 @@ class Identity extends Component {
 }
 
 const mapStateToProps = state => ({
+  blocks: state.blocks,
+  loading: state.loading,
+  error: state.error
 })
 
 const mapDispatchToProps = dispatch => ({
+  fetchBlocks: () => dispatch(fetchBlocks())
 })
 
 export default connect(mapStateToProps, mapDispatchToProps)(Identity)
