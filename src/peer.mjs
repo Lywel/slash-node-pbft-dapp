@@ -550,7 +550,7 @@ export class Peer extends EventEmitter {
     delete this.peers[this.state.nbNodes - 1]
     this.state.nbNodes--
 
-    if (this.i === this.view % this.nbNodes && !this.minerPid)
+    if (this.i === this.state.view % this.state.nbNodes && !this.minerPid)
       this.startMining()
   }
 
