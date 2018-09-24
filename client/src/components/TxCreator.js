@@ -26,7 +26,12 @@ class TxCreator extends Component {
       txTo: this.props.id.publicKey,
       txAmount: 0,
       connected: false,
-      ready: false
+      ready: false,
+      txSent: false,
+      txValid: false,
+      txInvalid: false,
+      msg: false,
+      sig: false
     }
   }
 
@@ -77,8 +82,6 @@ class TxCreator extends Component {
   }
 
   sendRequest = () => {
-    this.setState({ msg: null, sig: null, txValid: false, txInvalid: false })
-
     if (this.state.ready) {
       const msg = {
         tx: {
@@ -106,7 +109,7 @@ class TxCreator extends Component {
   }
 
   toggleModal = () => {
-    this.setState({ msg: null })
+    this.setState({ msg: null, sig: null, txSent: false, txValid: false, txInvalid: false })
   }
 
 

@@ -1,6 +1,7 @@
 import React, { Component } from 'react'
 import { connect } from 'react-redux'
 import {
+  Badge,
   Table,
   Form,
   FormGroup,
@@ -23,7 +24,7 @@ class Blockchain extends Component {
     this.state = {
       selectedBlock: 0,
       modal: false,
-      searchWord: 'tx'
+      searchWord: 'tx',
     }
   }
 
@@ -120,8 +121,14 @@ class Blockchain extends Component {
                 if (currentBlock.data.length) {
                   const blocks = currentBlock.data.map((data, id) => (
                     <tr key={'req' + id}>
-                      <td>{ data.request.tx.from }</td>
-                      <td>{ data.request.tx.to }</td>
+                      <th>
+                        From:<br />
+                        To:
+                      </th>
+                      <td>
+                        <Badge>{ data.request.tx.from }</Badge><br/>
+                        <Badge>{ data.request.tx.to }</Badge>
+                      </td>
                       <td>{ data.request.tx.amount }</td>
                       <td>{
                         (new Date(data.request.timestamp))
@@ -136,11 +143,11 @@ class Blockchain extends Component {
                   ))
 
                   return (
-                    <Table striped size='sm'>
+                    <Table striped responsive bordered size='lg'>
                       <thead>
                         <tr>
-                          <th>From</th>
-                          <th>To</th>
+                          <th></th>
+                          <th></th>
                           <th>Amount</th>
                           <th>Date</th>
                           <th>Valid</th>
@@ -155,12 +162,37 @@ class Blockchain extends Component {
                   return <p>No transactions on this block.</p>
               })()
             }
-            <h3>Block state</h3>
-            <Table>
+            <h3>Accounts</h3>
+            <Table responsive size='sm' bordered>
+              <tbody>
+              {
+                Object.entries(currentBlock.state.accounts).map(([key, balance]) => (
+                  <tr>
+                    <th><Badge>{ key }</Badge></th>
+                    <td>{ balance.toFixed(4) }</td>
+                  </tr>
+                ))
+              }
+              </tbody>
+            </Table>
+            <h3>Network state <small>(advanced)</small></h3>
+            <Table responsive size='sm' bordered>
               <tbody>
                 <tr>
-                  <td>state</td>
-                  <td><pre>{ JSON.stringify(currentBlock.state, null, 2) }</pre></td>
+                  <th>View</th>
+                  <td>{ currentBlock.state.view }</td>
+                </tr>
+                <tr>
+                  <th>Sequence number</th>
+                  <td>{ currentBlock.state.seqNb }</td>
+                </tr>
+                <tr>
+                  <th>Sequence number lower bound</th>
+                  <td>{ currentBlock.state.h }</td>
+                </tr>
+                <tr>
+                  <th>Numer of nodes</th>
+                  <td>{ currentBlock.state.nbNodes }</td>
                 </tr>
               </tbody>
             </Table>
