@@ -2,14 +2,19 @@ import React, { Component } from 'react'
 import { connect } from 'react-redux'
 import {
   Badge,
+  Alert,
   Card,
   FormGroup,
   Label,
   Input,
-  Button
-  } from 'reactstrap'
+  Button,
+  Progress,
+  Modal,
+  ModalHeader,
+  ModalBody,
+  Fade,
+} from 'reactstrap'
 
-//import { fetchBlocks } from '../actions/index'
 import secp256k1 from 'secp256k1'
 import { createHash } from 'crypto'
 
@@ -40,6 +45,17 @@ class TxCreator extends Component {
       case 'info':
         this.setState({ ready: true })
         break
+      case 'reply':
+        if (this.state.msg) {
+          console.log(msg.data.result)
+          setTimeout(() => {
+            if (msg.data.result.valid)
+              this.setState({ txValid: true })
+            else
+              this.setState({ txInvalid: true })
+          }, 800)
+        }
+        break
       default:
         console.log(`'${msg.type}' msg are not handled`)
       }
@@ -61,6 +77,8 @@ class TxCreator extends Component {
   }
 
   sendRequest = () => {
+    this.setState({ msg: null, sig: null, txValid: false, txInvalid: false })
+
     if (this.state.ready) {
       const msg = {
         tx: {
@@ -72,14 +90,23 @@ class TxCreator extends Component {
         client: this.props.id.publicKey
       }
 
+      this.setState({ msg })
+
       const sig = this.sign(msg)
-      console.log('checksum: ', this.hash(msg))
+
+      setTimeout(() => this.setState({ sig }), 200)
 
       this.ws.send(JSON.stringify({
         type: 'request',
         data: { msg, sig }
       }))
+
+      setTimeout(() => this.setState({ txSent: true }), 400)
     }
+  }
+
+  toggleModal = () => {
+    this.setState({ msg: null })
   }
 
 
@@ -88,8 +115,42 @@ class TxCreator extends Component {
     const pillColor = connected ? (ready ? 'success' : 'warning') : 'danger'
     const pillMsg = connected ? (ready ? 'ready' : 'connected'): 'disconnected'
 
+    const modalProgress = (1
+      + !!this.state.sig
+      + !!this.state.txSent
+      + !!(this.state.txValid || this.state.txInvalid)) * 25
+
+    const modal = (
+      <Modal isOpen={ (!!this.state.msg) } toggle={this.toggleModal}>
+        <ModalHeader>
+          New transaction
+        </ModalHeader>
+        <ModalBody>
+          <Progress
+            animated={ modalProgress !== 100 }
+            color={ modalProgress < 100 ? 'info'
+              : (this.state.txValid ? 'success' : 'danger')}
+            value={ modalProgress } />
+
+            <Alert isOpen={ !!this.state.sig } color='info' className='mt-3'>
+              Transaction signed
+            </Alert>
+            <Alert isOpen={ !!this.state.txSent } color='info'>
+              Transaction sent to the network
+            </Alert>
+            <Alert isOpen={ this.state.txValid } color='success'>
+              Transaction accepted. It should be visible in the next block.
+            </Alert>
+            <Alert isOpen={ this.state.txInvalid } color='danger'>
+              Transaction refused. It should be visible in the next block.
+            </Alert>
+        </ModalBody>
+      </Modal>
+    )
+
     return (
       <div>
+      { modal }
         <h2>Transfer creator{' '}
           <small><Badge pill color={ pillColor }>{ pillMsg }</Badge></small>
         </h2>
