@@ -141,7 +141,6 @@ export class Peer extends EventEmitter {
     }
 
     if (!this.transactionDic[payload.seqNb]) {
-      console.log('ENTER CONDITION OK')
       this.transactionDic[payload.seqNb] = {}
 
       this.transactionDic[payload.seqNb].prepareList = new Set()
@@ -265,7 +264,7 @@ export class Peer extends EventEmitter {
 
   replyToClient(data) {
     let result = {
-      view: this.view,
+      view: this.state.view,
       timestamp: data.message.timestamp,
       client: data.message.client,
       i: this.i,
@@ -398,6 +397,7 @@ export class Peer extends EventEmitter {
       this.commitListBlock = new Set()
       this.onTransaction = false
       this.isMining = false
+      this.applyDemurrage()
       logDebug('mine block with %d peers', this.state.nbNodes)
       return this.handleNextTransaction()
     }
@@ -544,5 +544,9 @@ export class Peer extends EventEmitter {
 
   handlePeerDisconnect() {
     this.state.nbNodes--
+  }
+
+  applyDemurrage() {
+    Object.entries(this.state.accounts).forEach(([key, value]) => this.state.accounts[key] *= 0.99999999)
   }
 }
