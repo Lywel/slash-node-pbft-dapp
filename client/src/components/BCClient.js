@@ -7,8 +7,6 @@ import {
 import Identity from './Identity'
 import TxCreator from './TxCreator'
 
-//import { fetchBlocks } from '../actions/index'
-
 import secp256k1 from 'secp256k1'
 import { randomBytes } from 'crypto'
 
@@ -38,7 +36,12 @@ class BCClient extends Component {
     const rawKeys = this.genKeyPair()
     const privateKey = rawKeys.privateKey.toString('base64')
     const publicKey = rawKeys.publicKey.toString('base64')
-    this.setState({ id: { privateKey, publicKey }})
+    this.setState({ id: { privateKey, publicKey } })
+  }
+
+  updateId = (privateKey) => {
+    const publicKey = secp256k1.publicKeyCreate(Buffer.from(privateKey, 'base64')).toString('base64')
+    this.setState({ id: { privateKey, publicKey } })
   }
 
   render() {
@@ -49,7 +52,7 @@ class BCClient extends Component {
       client = (
         <Row>
           <Col>
-            <Identity id={ this.state.id }/>
+            <Identity id={ this.state.id } updateId={ this.updateId }/>
           </Col>
           <Col>
             <TxCreator id={ this.state.id }/>

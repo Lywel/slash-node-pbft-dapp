@@ -167,7 +167,7 @@ class Blockchain extends Component {
               <tbody>
               {
                 Object.entries(currentBlock.state.accounts).map(([key, balance]) => (
-                  <tr>
+                  <tr key={ key }>
                     <th><Badge>{ key }</Badge></th>
                     <td>{ balance.toFixed(4) }</td>
                   </tr>

@@ -12,7 +12,6 @@ import {
   Modal,
   ModalHeader,
   ModalBody,
-  Fade,
 } from 'reactstrap'
 
 import secp256k1 from 'secp256k1'
