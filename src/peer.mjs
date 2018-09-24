@@ -34,7 +34,6 @@ export class Peer extends EventEmitter {
     this.blockchain = new Blockchain()
     this.state = new State()
     this.i = 0
-    this.nextI = 0
 
     this.pendingTxs = []
     this.transactionQueue = []
@@ -446,9 +445,7 @@ export class Peer extends EventEmitter {
     }
     logDebug('------ PEERS PLUS PLUS ------')
     this.ready = false
-    this.nextI++
-    logDebug('nextI = %d', this.nextI)
-    this.peers[this.nextI] = key
+    this.peers[this.state.nbNodes] = key
 
     this.state.nbNodes++
     setTimeout(this.handleSynchronized.bind(this), 1000)
@@ -464,7 +461,6 @@ export class Peer extends EventEmitter {
       pendingBlock: this.pendingBlock ? Object.assign({}, this.pendingBlock) : null,
       pendingBlockSig: this.pendingBlockSig,
       isMining: this.isMining,
-      nextI: this.nextI
     }
   }
 
@@ -489,14 +485,13 @@ export class Peer extends EventEmitter {
       this.pendingTxs = stateCandidate.data.pendingTxs
       this.transactionQueue = stateCandidate.data.transactionQueue
       this.peers = stateCandidate.data.peers
-      this.nextI = stateCandidate.data.nextI
       if (!stateCandidate.data.pendingBlock)
         this.pendingBlock = null
       else
         this.pendingBlock = Block.fromJSON(stateCandidate.data.pendingBlock)
       this.pendingBlockSig = stateCandidate.data.pendingBlockSig
       this.isMining = this.isMining
-      this.i = this.nextI
+      this.i = this.state.nbNodes - 1
       logDebug('My new i is: %d', this.i)
       this.receivedKeys = null
       this.receivedStatesHash = []
@@ -542,7 +537,17 @@ export class Peer extends EventEmitter {
     this.handleNextTransaction()
   }
 
-  handlePeerDisconnect() {
+  handlePeerDisconnect(key) {
+    let i = this.peers.indexOf(key)
+    if (i === -1)
+      throw new Error('key is not in peers list')
+
+    if (this.i > i)
+      this.i--
+    for (; i < this.peers.length - 1; i++) {
+      this.peers[i] = this.peers[i + 1]
+    }
+    delete this.peers[this.state.nbNodes - 1]
     this.state.nbNodes--
   }
 
