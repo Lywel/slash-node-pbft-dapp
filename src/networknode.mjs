@@ -47,8 +47,8 @@ export class NetworkNode {
     this.peer.on('reply', data => {
       const { client } = data.result
       if (this.clients[client]) {
-        log('replying %b client %s', data.result.valid, client)
-        this.clients[clients].send(JSON.stringify({
+        log('replying %o client %s', data.result.valid, client)
+        this.clients[client].send(JSON.stringify({
           type: 'reply',
           data: data
         }))
@@ -125,7 +125,7 @@ export class NetworkNode {
       ws.onclose = () => {
         log('closing connection')
         if (this.peers[ws.id])
-          this.peer.handlePeerDisconnect()
+          this.peer.handlePeerDisconnect(ws.id)
         delete this.peers[ws.id]
       }
     }
@@ -161,6 +161,11 @@ export class NetworkNode {
         }
       }))
     }
+    case 'observe':
+      this.clients[req.data.msg.client] = ws
+      this.clients[req.data.msg.client] = ws
+      this.clients[req.data.msg.client].observer = true
+      break
     case 'state':
     {
       this.registerPeer(ws, req.data.key)
@@ -173,8 +178,7 @@ export class NetworkNode {
     }
     case 'request':
     {
-      const { id } = req
-      this.clients[id] = ws
+      this.clients[req.data.msg.client] = ws
       return this.peer.handleRequest(req.data)
     }
     case 'synchronized':
@@ -201,6 +205,12 @@ export class NetworkNode {
 
     for (let [address, peer] of Object.entries(this.peers)) {
       if (peer.readyState == peer.OPEN) {
+        peer.send(bytes)
+      }
+    }
+
+    for (let [address, peer] of Object.entries(this.clients)) {
+      if (peer.readyState == peer.OPEN && peer.observer) {
         peer.send(bytes)
       }
     }
@@ -235,7 +245,7 @@ export class NetworkNode {
       else
         log('closing connection')
       if (this.peers[ctx.websocket.id]) {
-        this.peer.handlePeerDisconnect()
+        this.peer.handlePeerDisconnect(ctx.websocket.id)
         delete this.peers[ctx.websocket.id]
       }
     })
