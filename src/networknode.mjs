@@ -1,8 +1,6 @@
 import Koa from 'koa'
 import Router from 'koa-router'
 import logger from 'koa-logger'
-import bodyParser from 'koa-bodyparser'
-import json from 'koa-json'
 import socketify from 'koa-websocket'
 import cors from 'koa-cors'
 
@@ -13,8 +11,6 @@ import debug from 'debug'
 import knownPeers from './known-peers'
 import { Block } from './blockchain'
 import { Peer } from './peer'
-
-debug.formatters.h = v => v.toString('hex')
 
 const W3CWebSocket = websocket.w3cwebsocket;
 
@@ -28,9 +24,7 @@ export class NetworkNode {
 
     this.app
       .use(logger())
-      .use(json())
       .use(cors())
-      .use(bodyParser())
       .use(this.httpRouter().routes())
 
     this.app.ws.use(this.socketHandler.bind(this))
@@ -81,7 +75,6 @@ export class NetworkNode {
   // Setup the http endpoint
   httpRouter() {
     const router = new Router()
-
     router
       .get('/blocks', async ctx => {
         ctx.body = this.peer.blockchain.chain
@@ -162,7 +155,6 @@ export class NetworkNode {
       }))
     }
     case 'observe':
-      this.clients[req.data.msg.client] = ws
       this.clients[req.data.msg.client] = ws
       this.clients[req.data.msg.client].observer = true
       break
