@@ -26,6 +26,8 @@ import { debuglog } from 'util';
 let log = debug('peer')
 let logDebug = debug('debug')
 
+const TIMEOUT = process.env.TIMEOUT || 4000
+
 export class Peer extends EventEmitter {
   constructor(network) {
     super()
@@ -56,7 +58,7 @@ export class Peer extends EventEmitter {
 
     this.ready = false
 
-    setTimeout(this.checkIsReady.bind(this), 1000)
+    setTimeout(this.checkIsReady.bind(this), TIMEOUT)
   }
 
   handlePrePrepare(req) {
@@ -420,7 +422,7 @@ export class Peer extends EventEmitter {
         this.pendingBlock = null
         this.pendingBlockSig = null
       }
-    }, 1000)
+    }, TIMEOUT)
 
   }
 
@@ -446,7 +448,7 @@ export class Peer extends EventEmitter {
     this.peers[this.state.nbNodes] = key
 
     this.state.nbNodes++
-    setTimeout(this.handleSynchronized.bind(this), 1000)
+    setTimeout(this.handleSynchronized.bind(this), TIMEOUT)
 
     return {
       state: this.state ? Object.assign({}, this.state) : null,
