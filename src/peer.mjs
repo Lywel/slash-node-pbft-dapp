@@ -26,7 +26,7 @@ import { debuglog } from 'util';
 let log = debug('peer')
 let logDebug = debug('debug')
 
-const TIMEOUT = process.env.TIMEOUT || 4000
+const TIMEOUT = process.env.TIMEOUT || 6000
 
 export class Peer extends EventEmitter {
   constructor(network) {
@@ -427,7 +427,7 @@ export class Peer extends EventEmitter {
   }
 
   startMining() {
-    this.minerPid = setInterval(() => this.mine(), 3000)
+    this.minerPid = setInterval(() => this.mine(), 10000)
     logDebug('START MINING')
   }
 
