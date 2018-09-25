@@ -44,16 +44,12 @@ export class Peer extends EventEmitter {
     this.peers = []
     this.peers[this.i] = this.id.publicKey
     this.transactionDic = []
-    //this.prepareListsTx = []
-    //this.commitListsTx = []
 
     this.prepareListBlock = new Set()
     this.commitListBlock = new Set()
 
     this.onTransaction = false
     this.isMining = false
-    //this.message = null
-    //this.messageSig = null
 
     this.pendingBlock = null
     this.pendingBlockSig = null
@@ -103,10 +99,6 @@ export class Peer extends EventEmitter {
     if (this.i !== this.state.view % this.state.nbNodes)
       throw new Error('Cannot handle request: not masterNode')
     // TODO: trigger change view
-
-
-    //this.message = msg
-    //this.messageSig = sig
 
     const payload = {
       view: this.state.view,
@@ -182,13 +174,8 @@ export class Peer extends EventEmitter {
     log('===> handlePrepareTx(%O)', payload)
     if (!Identity.verifySig(payload, sig, this.peers[payload.i]))
       throw new Error('wrong payload signature')
-    if (!Identity.verifyHash(this.transactionDic[payload.seqNb].message, payload.digest)) {
-      console.log('dic at index', payload.seqNb)
-      console.log(this.transactionDic[payload.seqNb])
-      console.log('digest:')
-      console.log(payload.digest)
+    if (!Identity.verifyHash(this.transactionDic[payload.seqNb].message, payload.digest))
       throw new Error('wrong checksum for message')
-    }
     if (payload.view !== this.state.view)
       throw new Error('wrong view number')
     if (payload.seqNb < this.state.h)
@@ -196,8 +183,10 @@ export class Peer extends EventEmitter {
 
     this.transactionDic[payload.seqNb].prepareList.add(this.peers[payload.i])
 
-    if (this.transactionDic[payload.seqNb].prepareList.size >= (2 / 3)
-      * this.state.nbNodes) {
+    const prepareListSize = this.transactionDic[payload.seqNb].prepareList.size
+    const MinNonFaulty = (2 / 3) * this.state.nbNodes
+
+    if (prepareListSize >= MinNonFaulty) {
 
       this.transactionDic[payload.seqNb].commitList.add(this.id.publicKey)
       let payloadI = { ...payload }
@@ -228,9 +217,11 @@ export class Peer extends EventEmitter {
       throw new Error('sequence number is lower than h')
 
     this.transactionDic[payload.seqNb].commitList.add(this.peers[payload.i])
-    if (this.transactionDic[payload.seqNb].commitList.size > (1 / 3)
-      * this.state.nbNodes) {
 
+    const commitListSize = this.transactionDic[payload.seqNb].commitList.size
+    const maxFaultyNodes =  (1 / 3) * this.state.nbNodes
+
+    if (commitListSize > maxFaultyNodes) {
       this.replyToClient(this.transactionDic[payload.seqNb])
       this.state.h++
       this.onTransaction = false
@@ -317,17 +308,14 @@ export class Peer extends EventEmitter {
       return
     }
 
-    if (!Identity.verifySig(block, sig, this.peers[this.state.view % this.state.nbNodes])) {
-      console.log('')
+    if (!Identity.verifySig(block, sig, this.peers[this.state.view % this.state.nbNodes]))
       throw new Error('Block signature is invalid')
-    }
 
     this.pendingBlock = block
     this.pendingBlockSig = sig
     this.onTransaction = true
 
     this.prepareListBlock = new Set()
-    // Add master peer signature
 
     this.emit('prepare', {
       emitter: this.id.publicKey,
@@ -355,7 +343,7 @@ export class Peer extends EventEmitter {
 
       this.pendingBlock = null
       this.pendingBlockSig = null
-      this.isMining &= false
+      this.isMining = false
       this.onTransaction = false
       throw new Error('Block verification failed: hashs don\'t match')
     }
@@ -363,7 +351,10 @@ export class Peer extends EventEmitter {
     this.prepareListBlock.add(emitter)
     log('prepareListBlock: %O', this.prepareListBlock)
 
-    if (this.prepareListBlock.size >= (2 / 3) * this.state.nbNodes) {
+    const prepareListBlockSize = this.prepareListBlock.size
+    const MinNonFaulty = (2 / 3) * this.state.nbNodes
+
+    if (prepareListBlockSize >= MinNonFaulty) {
       this.emit('commit', {
         emitter: this.id.publicKey,
         type: 'block'
@@ -382,8 +373,12 @@ export class Peer extends EventEmitter {
 
     log('commitListBlock %O', this.commitListBlock)
 
-    if (this.commitListBlock.size > (1 / 3) * this.state.nbNodes) {
+    const commitListBlockSize = this.commitListBlock.size
+    const maxFaultyNodes = (1 / 3) * this.state.nbNodes
+
+    if (commitListBlockSize > maxFaultyNodes) {
       this.blockchain.chain.push(this.pendingBlock)
+
       logDebug('-------')
       logDebug(this.peers)
       logDebug('peer state:')
@@ -392,6 +387,7 @@ export class Peer extends EventEmitter {
       logDebug(this.pendingBlock.state)
       logDebug('-------')
       log('⛏️  Block #%d validated', this.pendingBlock.index)
+
       this.pendingTxs = []
       this.pendingBlock = null
       this.pendingBlockSig = null
@@ -407,7 +403,6 @@ export class Peer extends EventEmitter {
 
 
   mine() {
-    //this.isMining = true
     this.pendingBlock = this.buildNextBlock()
     this.pendingBlockSig = this.id.sign(this.pendingBlock)
 
@@ -452,8 +447,6 @@ export class Peer extends EventEmitter {
 
     this.state.nbNodes++
     setTimeout(this.handleSynchronized.bind(this), 1000)
-    console.log('peer number', this.i)
-
 
     return {
       state: this.state ? Object.assign({}, this.state) : null,
@@ -495,7 +488,7 @@ export class Peer extends EventEmitter {
       this.pendingBlockSig = stateCandidate.data.pendingBlockSig
       this.isMining = this.isMining
       this.i = this.state.nbNodes - 1
-      logDebug('My new i is: %d', this.i)
+      logDebug('peer\'s i is: %d', this.i)
       this.receivedKeys = null
       this.receivedStatesHash = []
 
