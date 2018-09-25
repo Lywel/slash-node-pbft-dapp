@@ -191,7 +191,7 @@ class Blockchain extends Component {
                   <td>{ currentBlock.state.h }</td>
                 </tr>
                 <tr>
-                  <th>Numer of nodes</th>
+                  <th>Number of nodes</th>
                   <td>{ currentBlock.state.nbNodes }</td>
                 </tr>
               </tbody>
