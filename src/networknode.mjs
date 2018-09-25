@@ -87,6 +87,7 @@ export class NetworkNode {
     this.sentJoin = 0
 
     const createSocket = (address) => {
+      console.log(address)
       // Dont connect to yourself
       if (address === `localhost:${this.port}`)
         return
@@ -124,6 +125,10 @@ export class NetworkNode {
     }
 
     knownPeers.forEach(createSocket)
+    process.argv
+      .filter(arg => arg.startsWith('--peer='))
+      .map(arg => arg.substr(7))
+      .forEach(createSocket)
   }
 
   registerPeer(ws, key) {

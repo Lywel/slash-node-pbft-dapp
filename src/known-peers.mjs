@@ -1,5 +1,4 @@
 export default [
-  "maxime.ga:4242",
   "localhost:3000",
   "localhost:3001",
   "localhost:3002",
