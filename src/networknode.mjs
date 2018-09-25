@@ -127,10 +127,10 @@ export class NetworkNode {
   }
 
   registerPeer(ws, key) {
-      ws.id = key
-      ws.log = log.extend(key.substr(0, 8))
-      this.peers[key] = ws
-      ws.log('Successfully registered')
+    ws.id = key
+    ws.log = log.extend(key.substr(0, 8))
+    this.peers[key] = ws
+    ws.log('Successfully registered')
   }
 
   handlePeerMsg(ws, req) {

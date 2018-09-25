@@ -61,7 +61,6 @@ export class Peer extends EventEmitter {
     this.ready = false
 
     setTimeout(this.checkIsReady.bind(this), 1000)
-
   }
 
   handlePrePrepare(req) {
