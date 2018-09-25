@@ -16,6 +16,7 @@ import {
 
 import secp256k1 from 'secp256k1'
 import { createHash } from 'crypto'
+import { fetchBlocks } from '../actions/index'
 
 class TxCreator extends Component {
   constructor(props) {
@@ -53,13 +54,12 @@ class TxCreator extends Component {
       case 'reply':
         if (this.state.msg) {
           console.log(msg.data.result)
-          setTimeout(() => {
-            if (msg.data.result.valid)
-              this.setState({ txValid: true })
-            else
-              this.setState({ txInvalid: true })
-            clearTimeout(this.state.reqTimout)
-          }, 800)
+          clearTimeout(this.state.reqTimeout)
+
+          if (msg.data.result.valid)
+            this.setState({ txValid: true })
+          else
+            this.setState({ txInvalid: true })
         }
         break
       default:
@@ -82,7 +82,7 @@ class TxCreator extends Component {
     this.setState({ [name]: evt.target.value })
   }
 
-  sendRequest = () => {
+  sendRequest = async () => {
     if (this.state.ready && !this.state.msg) {
       const msg = {
         tx: {
@@ -94,30 +94,29 @@ class TxCreator extends Component {
         client: this.props.id.publicKey
       }
 
-      this.setState({ msg })
-
       const sig = this.sign(msg)
 
-      setTimeout(() => this.setState({ sig }), 200)
+      this.setState({ msg, sig })
 
-      this.ws.send(JSON.stringify({
+      await this.ws.send(JSON.stringify({
         type: 'request',
         data: { msg, sig }
       }))
 
-      setTimeout(() => this.setState({ txSent: true }), 400)
+      this.setState({ txSent: true })
 
-      this.setState({
-        reqTimeout: setTimeout(() => {
-          if (this.state.msg)
-            this.setState({ txInvalid: true })
+      const reqTimeout = setTimeout(() => {
+        if (this.state.msg)
+          this.setState({ txInvalid: true })
         }, 2000)
-      })
+
+      this.setState({ reqTimeout })
     }
   }
 
   toggleModal = () => {
     this.setState({ msg: null, sig: null, txSent: false, txValid: false, txInvalid: false })
+    this.props.fetchBlocks()
   }
 
 
@@ -192,9 +191,13 @@ class TxCreator extends Component {
 }
 
 const mapStateToProps = state => ({
+  blocks: state.blocks,
+  loading: state.loading,
+  error: state.error
 })
 
 const mapDispatchToProps = dispatch => ({
+  fetchBlocks: () => dispatch(fetchBlocks())
 })
 
 export default connect(mapStateToProps, mapDispatchToProps)(TxCreator)

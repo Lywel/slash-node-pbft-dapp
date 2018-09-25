@@ -46,6 +46,7 @@ class Identity extends Component {
         const der = Buffer.from(evt.target.result, 'base64')
         const privKey = secp256k1.privateKeyImport(der).toString('base64')
         this.props.updateId(privKey)
+        this.props.fetchBlocks()
     }
 
     reader.readAsText(evt.target.files[0])
