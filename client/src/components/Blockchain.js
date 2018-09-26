@@ -162,40 +162,6 @@ class Blockchain extends Component {
                   return <p>No transactions on this block.</p>
               })()
             }
-            <h3>Accounts</h3>
-            <Table responsive size='sm' bordered>
-              <tbody>
-              {
-                Object.entries(currentBlock.state.accounts).map(([key, balance]) => (
-                  <tr key={ key }>
-                    <th><Badge>{ key }</Badge></th>
-                    <td>{ balance }</td>
-                  </tr>
-                ))
-              }
-              </tbody>
-            </Table>
-            <h3>Network state <small>(advanced)</small></h3>
-            <Table responsive size='sm' bordered>
-              <tbody>
-                <tr>
-                  <th>View</th>
-                  <td>{ currentBlock.state.view }</td>
-                </tr>
-                <tr>
-                  <th>Sequence number</th>
-                  <td>{ currentBlock.state.seqNb }</td>
-                </tr>
-                <tr>
-                  <th>Sequence number lower bound</th>
-                  <td>{ currentBlock.state.h }</td>
-                </tr>
-                <tr>
-                  <th>Number of nodes</th>
-                  <td>{ currentBlock.state.nbNodes }</td>
-                </tr>
-              </tbody>
-            </Table>
           </ModalBody>
           <ModalFooter>
             <Button color="secondary" onClick={this.closeModal}>Close</Button>

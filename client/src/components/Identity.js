@@ -53,10 +53,7 @@ class Identity extends Component {
   }
 
   render() {
-    const block = this.props.blocks[this.props.blocks.length - 1]
     let balance = 0
-    if (block)
-      balance = block.state.accounts[this.props.id.publicKey] || 0
 
     return (
       <div>
