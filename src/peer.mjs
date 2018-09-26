@@ -379,7 +379,7 @@ export class Peer extends EventEmitter {
     const maxFaultyNodes = (1 / 3) * this.state.nbNodes
 
     if (commitListBlockSize > maxFaultyNodes) {
-      this.blockchain.chain.push(this.pendingBlock)
+      this.blockchain.pushBlock(this.pendingBlock)
 
       logDebug('peers list:')
       logDebug(this.peers)

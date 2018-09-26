@@ -1,4 +1,6 @@
 import crypto from 'crypto'
+import low from 'lowdb'
+import FileSync from 'lowdb/adapters/FileSync'
 
 const crypto_secret = process.env.CRYPTO_SECRET || "cpassympa".toString()
 
@@ -45,7 +47,17 @@ export class Block {
 
 export class Blockchain {
   constructor() {
-    this.chain = [this.genesisBlock()]
+    const adapter = new FileSync('blockchain.json')
+    this.db = low(adapter)
+
+    this.db.defaults({
+      chain: [this.genesisBlock()]
+    })
+    .write()
+  }
+
+  get chain() {
+    return this.db.get('chain').value()
   }
 
   genesisBlock() {
@@ -53,34 +65,20 @@ export class Blockchain {
   }
 
   lastBlock() {
-    return this.chain[this.chain.length - 1]
+    return this.db.get('chain').last().value()
+  }
+
+  pushBlock(block) {
+    this.db.get('chain').push(block).write()
   }
 
   addBlock(data, stateHash) {
-    let block = new Block(
+    const block = new Block(
       this.chain.length,
       data,
       this.lastBlock().hash,
       stateHash)
-    this.chain.push(block)
-  }
-
-  static isValid(chain) {
-    for (let i = 1; i < chain.length; ++i) {
-      const cur = chain[i]
-      const prev = chain[i - 1]
-
-      if (cur.hash !== cur.computeHash() || cur.prevHash !== prev.hash)
-        return false
-    }
-    return true
-  }
-
-  replaceChain(chain) {
-    if (chain[0].equals(this.chain[0])
-      && Blockchain.isValid(chain)
-      && chain.length > this.chain.length)
-      this.chain = chain
+    this.pushBlock(block)
   }
 
   static fromJSON(json) {
