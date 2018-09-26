@@ -1,11 +1,3 @@
-export const simpleAction = () => dispatch => {
-  // let res = await longWork()
-  dispatch({
-    type: 'SIMPLE_ACTION',
-    payload: 'res'
-  })
-}
-
 export const FETCH_BLOCKS_BEGIN   = 'FETCH_BLOCKS_BEGIN'
 export const FETCH_BLOCKS_SUCCESS = 'FETCH_BLOCKS_SUCCESS'
 export const FETCH_BLOCKS_ERROR = 'FETCH_BLOCKS_FAILURE'
@@ -45,3 +37,30 @@ export function fetchBlocks() {
       .catch(err => dispatch(fetchBlocksError(err)))
   }
 }
+
+
+
+export const GET_BALANCE_SUCCESS = 'GET_BALANCE_SUCCESS'
+export const GET_BALANCE_ERROR = 'GET_BALANCE_ERROR'
+
+export function getBalance(account) {
+  return dispatch => {
+    return fetch('http://localhost:3001/balance/' + Buffer.from(account, 'base64').toString('hex'))
+      .then(handleErrors)
+      .then(res => res.json())
+      .then(json => {
+        console.log(json)
+        dispatch({
+          type: GET_BALANCE_SUCCESS,
+          payload: json
+        })
+        return json
+      })
+      .catch(err => dispatch({
+        type: GET_BALANCE_ERROR,
+        payload: err
+      }))
+  }
+}
+
+

@@ -1,7 +1,8 @@
 import {
   FETCH_BLOCKS_BEGIN,
   FETCH_BLOCKS_SUCCESS,
-  FETCH_BLOCKS_ERROR
+  FETCH_BLOCKS_ERROR,
+  GET_BALANCE_SUCCESS,
 } from '../actions/index';
 
 const initialState = {
@@ -30,6 +31,11 @@ export const rootReducer = (state = initialState, action) => {
       blocks: [],
       loading: false,
       error: action.payload.error
+    }
+  case GET_BALANCE_SUCCESS:
+    return {
+      ...state,
+      balance: action.payload.balance,
     }
   default:
     return state

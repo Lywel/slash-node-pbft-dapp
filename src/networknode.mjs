@@ -76,6 +76,10 @@ export class NetworkNode {
   httpRouter() {
     const router = new Router()
     router
+      .get('/balance/:address', async ctx => {
+        const address = Buffer.from(ctx.params.address, 'hex').toString('base64')
+        ctx.body = { balance: this.peer.getBalance(address) }
+      })
       .get('/blocks', async ctx => {
         ctx.body = this.peer.blockchain.chain
       })

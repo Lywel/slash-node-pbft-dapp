@@ -9,9 +9,18 @@ import {
   Button,
   } from 'reactstrap'
 
-import { fetchBlocks } from '../actions/index'
+import { getBalance } from '../actions/index'
 
 class Identity extends Component {
+  componentDidMount() {
+    this.getBalance()
+    setInterval(this.getBalance, 60000)
+  }
+
+  getBalance = () => {
+    console.log('getBalance')
+    this.props.getBalance(this.props.id.publicKey)
+  }
 
   savePrivateKey = () => {
     const der = secp256k1.privateKeyExport(
@@ -46,21 +55,21 @@ class Identity extends Component {
         const der = Buffer.from(evt.target.result, 'base64')
         const privKey = secp256k1.privateKeyImport(der).toString('base64')
         this.props.updateId(privKey)
-        this.props.fetchBlocks()
+        this.getBalance()
     }
 
     reader.readAsText(evt.target.files[0])
   }
 
   render() {
-    let balance = 0
+    const { balance } = this.props
 
     return (
       <div>
         <h2>Identity</h2>
         <ListGroup>
-          <ListGroupItem>Blance{' '}
-            <Badge> { Math.floor(balance) } </Badge>
+          <ListGroupItem>Bwlance{' '}
+            <Badge> { balance } </Badge>
           </ListGroupItem>
           <ListGroupItem>Public{' '}
             <Badge>{ this.props.id.publicKey }</Badge>
@@ -86,13 +95,11 @@ class Identity extends Component {
 }
 
 const mapStateToProps = state => ({
-  blocks: state.blocks,
-  loading: state.loading,
-  error: state.error
+  balance: state.balance
 })
 
 const mapDispatchToProps = dispatch => ({
-  fetchBlocks: () => dispatch(fetchBlocks())
+  getBalance: (account) => dispatch(getBalance(account))
 })
 
 export default connect(mapStateToProps, mapDispatchToProps)(Identity)
