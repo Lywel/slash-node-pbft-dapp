@@ -1,7 +1,7 @@
 import EventEmitter from 'events'
 import debug from 'debug'
 import { Identity } from './identity'
-import { Blockchain, Block, State } from './blockchain';
+import { Blockchain, Block, State, CheckPoint } from './blockchain';
 import knownPeers from './known-peers'
 import { debuglog } from 'util';
 
@@ -35,6 +35,7 @@ export class Peer extends EventEmitter {
     this.id = new Identity()
     this.blockchain = new Blockchain()
     this.state = new State()
+    this.checkpoint = null
     this.i = 0
 
     this.pendingTxs = []
@@ -50,8 +51,12 @@ export class Peer extends EventEmitter {
     this.prepareListBlock = new Set()
     this.commitListBlock = new Set()
 
+    this.changeViewList = new Set()
+
     this.onTransaction = false
     this.isMining = false
+    this.isChangingView = false
+    this.timer = null
 
     this.pendingBlock = null
     this.pendingBlockSig = null
@@ -161,7 +166,7 @@ export class Peer extends EventEmitter {
       ...payload,
       i: this.i
     }
-    this.onTransaction = true
+    this.startOperation('transaction')
 
     this.emit('prepare', {
       payload: payloadI,
@@ -226,13 +231,14 @@ export class Peer extends EventEmitter {
     if (commitListSize > maxFaultyNodes) {
       this.replyToClient(this.transactionDic[payload.seqNb])
       this.state.h++
-      this.onTransaction = false
+      this.stopOperation('transaction')
       this.transactionDic[payload.seqNb].message = null
       this.transactionDic[payload.seqNb].messageSig = null
 
       this.handleNextTransaction()
     }
   }
+
 
   handleNextTransaction() {
     if (!this.ready)
@@ -315,7 +321,8 @@ export class Peer extends EventEmitter {
 
     this.pendingBlock = block
     this.pendingBlockSig = sig
-    this.onTransaction = true
+    //this.onTransaction = true
+    this.startOperation('block')
 
     this.prepareListBlock = new Set()
 
@@ -345,8 +352,7 @@ export class Peer extends EventEmitter {
 
       this.pendingBlock = null
       this.pendingBlockSig = null
-      this.isMining = false
-      this.onTransaction = false
+      this.stopOperation('block')
       throw new Error('Block verification failed: hashs don\'t match')
     }
 
@@ -367,7 +373,7 @@ export class Peer extends EventEmitter {
 
   handleCommitBlock(emitter) {
     log('===> handleCommitBlock(%o)', emitter)
-    if (!this.pendingBlock || !this.onTransaction) {
+    if (!this.pendingBlock) {
       return
     }
 
@@ -394,10 +400,14 @@ export class Peer extends EventEmitter {
       this.pendingBlockSig = null
       this.prepareListBlock = new Set()
       this.commitListBlock = new Set()
-      this.onTransaction = false
       this.isMining = false
       this.applyDemurrage()
       logDebug('mine block with %d peers', this.state.nbNodes)
+
+      if (this.blockchain.chain.length % 100 === 0) {
+        this.checkpoint = new CheckPoint(this.state, this.blockchain.chain.length)
+        log('checkpoint %d produced', this.blockchain.chain.length)
+      }
       return this.handleNextTransaction()
     }
   }
@@ -555,7 +565,30 @@ export class Peer extends EventEmitter {
     Object.entries(this.state.accounts).forEach(([key, value]) => this.state.accounts[key] *= 0.99999999)
   }
 
+  startOperation(type) {
+    if (type === 'transaction')
+      this.onTransaction = true
+    if (type === 'block')
+      this.isMining = true
+    this.timer = setTimeout(this.changeView.bind(this), TIMEOUT)
+  }
+
+  stopOperation(type) {
+    if (type === 'transaction')
+      this.onTransaction = false
+    if (type === 'block')
+      this.isMining = false
+    clearTimeout(this.timer)
+  }
+
+  changeView() {
+    const changeViewMessage = {
+      view: this.state.view + 1
+    }
+  }
+
   getBalance(key) {
     return this.state.accounts[key] || 0
   }
+
 }

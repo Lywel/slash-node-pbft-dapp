@@ -95,3 +95,11 @@ export class Blockchain {
     return new Blockchain(json.chain)
   }
 }
+
+export class CheckPoint {
+  constructor(state, n) {
+    this.state = state
+    this.n = n
+  }
+}
+
