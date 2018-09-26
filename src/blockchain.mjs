@@ -13,12 +13,12 @@ export class State {
 }
 
 export class Block {
-  constructor(index, data, prevHash, state) {
+  constructor(index, data, prevHash, stateHash) {
     this.index = index
     this.data = data
     this.prevHash = prevHash
     this.hash = this.computeHash()
-    this.state = state
+    this.stateHash = stateHash
   }
 
   computeHash() {
@@ -37,7 +37,7 @@ export class Block {
   }
 
   static fromJSON(json) {
-    let block = new Block(json.index, json.data, json.prevHash, json.state)
+    let block = new Block(json.index, json.data, json.prevHash, json.stateHash)
     block.hash = json.hash
     return block
   }
@@ -49,19 +49,19 @@ export class Blockchain {
   }
 
   genesisBlock() {
-    return new Block(0, [], 0, new State({"root" : 100}))
+    return new Block(0, [], 0, null)
   }
 
   lastBlock() {
     return this.chain[this.chain.length - 1]
   }
 
-  addBlock(data, state) {
+  addBlock(data, stateHash) {
     let block = new Block(
       this.chain.length,
       data,
       this.lastBlock().hash,
-      state)
+      stateHash)
     this.chain.push(block)
   }
 

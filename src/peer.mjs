@@ -293,7 +293,7 @@ export class Peer extends EventEmitter {
       this.blockchain.chain.length,
       this.pendingTxs,
       this.blockchain.lastBlock().hash,
-      JSON.parse(JSON.stringify(this.state))
+      Identity.hash(this.state)
     )
   }
 
@@ -381,13 +381,12 @@ export class Peer extends EventEmitter {
     if (commitListBlockSize > maxFaultyNodes) {
       this.blockchain.chain.push(this.pendingBlock)
 
-      logDebug('-------')
+      logDebug('peers list:')
       logDebug(this.peers)
       logDebug('peer state:')
       logDebug(this.state)
-      logDebug('pending block state:')
-      logDebug(this.pendingBlock.state)
-      logDebug('-------')
+      logDebug('pending block state hash:')
+      logDebug(this.pendingBlock.stateHash)
       log('⛏️  Block #%d validated', this.pendingBlock.index)
 
       this.pendingTxs = []
@@ -554,5 +553,9 @@ export class Peer extends EventEmitter {
 
   applyDemurrage() {
     Object.entries(this.state.accounts).forEach(([key, value]) => this.state.accounts[key] *= 0.99999999)
+  }
+
+  getBalance(key) {
+    return this.state.accounts[key] || 0
   }
 }
