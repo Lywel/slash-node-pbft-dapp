@@ -1,0 +1,44 @@
+.App {
+}
+
+.App-logo {
+  animation: App-logo-spin infinite 2s ease-in-out;
+  height: 80px;
+  filter: invert(.9) blur(1px);
+  z-index: 1;
+}
+
+.App-header {
+  z-index: 10;
+  background-color: #222;
+  height: 150px;
+  padding: 20px;
+  color: white;
+  text-align: center
+}
+
+.App-title {
+  font-size: 1.5em;
+}
+
+.App-intro {
+  font-size: large;
+}
+
+@keyframes App-logo-spin {
+  from {
+    transform: rotate(0deg);
+    filter: invert(1) blur(0)
+  }
+  50% {
+    filter: invert(0) blur(2px)
+  }
+  to {
+    transform: rotate(720deg);
+    filter: invert(1) blur(0)
+  }
+}
+
+.row {
+  margin-top: 15px;
+}

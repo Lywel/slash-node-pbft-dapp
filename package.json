@@ -4,7 +4,7 @@
   "description": "POC of a blockchain dapp",
   "main": "src/main.mjs",
   "scripts": {
-    "test": "echo lol",
+    "test": "mocha -r esm",
     "start": "node --experimental-modules src/main.mjs"
   },
   "repository": {
@@ -17,13 +17,19 @@
     "debug": "^4.0.1",
     "get-port": "^4.0.0",
     "koa": "^2.5.3",
-    "koa-bodyparser": "^4.2.1",
     "koa-cors": "0.0.16",
-    "koa-json": "^2.0.2",
     "koa-logger": "^3.2.0",
     "koa-router": "^7.4.0",
     "koa-websocket": "^5.0.1",
+    "lowdb": "^1.0.0",
     "secp256k1": "^3.5.2",
     "websocket": "^1.0.26"
+  },
+  "devDependencies": {
+    "chai": "^4.1.2",
+    "chai-as-promised": "^7.1.1",
+    "chai-events": "0.0.1",
+    "esm": "^3.0.84",
+    "mocha": "^5.2.0"
   }
 }

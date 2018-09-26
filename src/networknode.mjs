@@ -1,25 +1,20 @@
 import Koa from 'koa'
 import Router from 'koa-router'
 import logger from 'koa-logger'
-import bodyParser from 'koa-bodyparser'
-import json from 'koa-json'
 import socketify from 'koa-websocket'
 import cors from 'koa-cors'
 
 import getPort from 'get-port'
 import websocket from 'websocket'
-
 import debug from 'debug'
 
 import knownPeers from './known-peers'
 import { Block } from './blockchain'
 import { Peer } from './peer'
 
-debug.formatters.h = v => v.toString('hex')
-
 const W3CWebSocket = websocket.w3cwebsocket;
 
-const log = debug('[ NetworkNode ]')
+const log = debug('network-node')
 
 export class NetworkNode {
   constructor() {
@@ -30,36 +25,35 @@ export class NetworkNode {
     this.app
       .use(logger())
       .use(cors())
-      .use(json())
-      .use(bodyParser())
       .use(this.httpRouter().routes())
 
-    // Websocket p2p server setup
-    this.app.ws
-      .use(async ctx => await this.socketHandler(ctx))
+    this.app.ws.use(this.socketHandler.bind(this))
 
     this.peers = []
-    this.peer = new Peer()
-    this.peer.on('master-msg', msg => {
-      this.sendMaster(msg)
+    this.peer = new Peer(this)
+    this.clients = []
+
+    this.peerEventHandler = this.peerEventHandler.bind(this)
+    this.peer.on('pre-prepare', this.peerEventHandler('pre-prepare'))
+    this.peer.on('prepare', this.peerEventHandler('prepare'))
+    this.peer.on('commit', this.peerEventHandler('commit'))
+    this.peer.on('synchronized', this.peerEventHandler('synchronized'))
+    this.peer.on('reply', data => {
+      const { client } = data.result
+      if (this.clients[client]) {
+        log('replying %o client %s', data.result.valid, client)
+        this.clients[client].send(JSON.stringify({
+          type: 'reply',
+          data: data
+        }))
+        delete this.clients[client]
+      } else
+        log('client %s is not reachable', client)
     })
-    this.peer.on('block', (block, setRequiredSignatures) => {
-      // Compute required signature numer
-      const networkSize = Object.keys(this.peers).length
-      const signNb = 2 / 3 * (networkSize + 1)
+  }
 
-      setRequiredSignatures(signNb)
-
-      this.broadcast({
-        type: 'blockchain',
-        data: this.peer.blockchain.chain
-      })
-
-      this.broadcast({
-        type: 'block',
-        data: block
-      })
-    })
+  peerEventHandler(type) {
+    return (data) => this.broadcast({ type, data })
   }
 
   // Start the node
@@ -70,8 +64,6 @@ export class NetworkNode {
     this.server = this.app.listen(this.port, () => {
       log('started on port %d', this.port)
       this.peerDiscovery()
-      if (process.env.MASTER)
-        this.peer.startMining()
     })
   }
 
@@ -83,22 +75,23 @@ export class NetworkNode {
   // Setup the http endpoint
   httpRouter() {
     const router = new Router()
-
     router
+      .get('/balance/:address', async ctx => {
+        const address = Buffer.from(ctx.params.address, 'hex').toString('base64')
+        ctx.body = { balance: this.peer.getBalance(address) }
+      })
       .get('/blocks', async ctx => {
         ctx.body = this.peer.blockchain.chain
       })
-      .post('/tx', async ctx => {
-        this.peer.registerTx(ctx.request.body)
-        ctx.status = 200
-      })
-
     return router
   }
 
   // Find the other nodes of the network
   peerDiscovery() {
+    this.sentJoin = 0
+
     const createSocket = (address) => {
+      console.log(address)
       // Dont connect to yourself
       if (address === `localhost:${this.port}`)
         return
@@ -110,131 +103,159 @@ export class NetworkNode {
           const msg = JSON.parse(evt.data)
           this.handlePeerMsg(ws, msg)
         } catch (err) {
-          log(`[${ws.id || ws.url}] invalid msg`)
+          console.log(err)
+          if (ws.log)
+            ws.log('Error: ' + err.message + '\n%O', evt.data)
+          else
+            log('Error: ' + err.message + '\n%O', evt.data)
         }
       }
+
       ws.onopen = () => {
-        log(`[${ws.id || ws.url}] connection opened`)
+        log('new websocket connection on \'%s\'', ws.url)
+        this.sentJoin++
         ws.send(JSON.stringify({
-          type: 'id',
-          data: {
-            id: this.peer.id.publicKey.toString('hex'),
-            master: !!process.env.MASTER,
-            chain: this.peer.blockchain.chain
-          }
+          type: 'join',
+          data: { key: this.peer.id.publicKey }
         }))
       }
+
       ws.onclose = () => {
-        log(`[${ws.id || ws.url}] connection closed`)
+        log('closing connection')
+        if (this.peers[ws.id])
+          this.peer.handlePeerDisconnect(ws.id)
         delete this.peers[ws.id]
       }
     }
 
     knownPeers.forEach(createSocket)
+    process.argv
+      .filter(arg => arg.startsWith('--peer='))
+      .map(arg => arg.substr(7))
+      .forEach(createSocket)
   }
 
-  handlePeerMsg(ws, msg) {
+  registerPeer(ws, key) {
+    ws.id = key
+    ws.log = log.extend(key.substr(0, 8))
+    this.peers[key] = ws
+    ws.log('Successfully registered')
+  }
+
+  handlePeerMsg(ws, req) {
     if (ws.log)
-      ws.log('sent a %s msg', msg.type)
+      ws.log('sends a \'%s\'', req.type)
     else
-      log(`[${ws.id || ws.url}] sent a '${msg.type}' msg`)
+      log(req.type)
 
-    switch (msg.type) {
-    case 'block':
-      // Receied block for validation
-      this.peer.checkBlock(msg.data)
-      this.broadcast({
-        type: 'validation',
-        data: true,
-        id: msg.data.index
-      })
-      break
+    switch (req.type) {
+    case 'join':
+    {
+      this.registerPeer(ws, req.data.key)
+      const state = this.peer.newPeer(req.data.key)
 
-    case 'id':
-      // Replace local chain with a new one
-      ws.id = msg.data.id
-      ws.isMaster = msg.data.master
-      ws.log = log.extend(ws.id.substr(0, 8))
-      this.peers[msg.data.id] = ws
+      log('Sending my state to %O', req.data)
+      return ws.send(JSON.stringify({
+        type: 'state',
+        data: {
+          ...state,
+          key: this.peer.id.publicKey
+        }
+      }))
+    }
+    case 'observe':
+      this.clients[req.data.msg.client] = ws
+      this.clients[req.data.msg.client].observer = true
+      break
+    case 'state':
+    {
+      this.registerPeer(ws, req.data.key)
+      ws.log('sent it\'s state (1/%d)', this.sentJoin)
 
-      ws.log(`registered`)
-      if (ws.isMaster)
-        ws.log(`is masterNode`)
-      this.peer.blockchain.replaceChain(msg.data.chain.map(Block.fromJSON))
+      return this.peer.syncState(
+        req.data,
+        this.sentJoin
+      )
+    }
+    case 'request':
+      this.clients[req.data.msg.client] = ws
+      if (!this.peer.isMasterPeer()) {
+        return this.broadcast({
+          type: 'peer-request',
+          data: req.data
+        })
+      }
+    case 'peer-request':
+      if (this.peer.isMasterPeer())
+        return this.peer.handleRequest(req.data)
       break
-
-    case 'blockchain':
-      // Compare chain and eventually replace it
-      this.peer.blockchain.replaceChain(msg.data.map(Block.fromJSON))
+    case 'synchronized':
+      return this.peer.handleSynchronized()
+    case 'pre-prepare':
+      return this.peer.handlePrePrepare(req.data)
+    case 'prepare':
+      return this.peer.handlePrepare(req.data)
+    case 'commit':
+      return this.peer.handleCommit(req.data)
+    case 'info':
+      // Peers dont care about infos
       break
-
-    // Master node
-    case 'tx':
-      this.peer.registerTx(msg.data)
-      break
-    case 'validation':
-      this.peer.signBlock({ emitter: ws.id })
-      break
+    default:
+      throw new Error(`Unhandled request type '${req.type}'`)
     }
   }
 
   broadcast(data) {
-    log(`broadcasting ${data.type} to ${Object.keys(this.peers).length } peers`)
+    log(`Broadcasting ${data.type} to ${Object.keys(this.peers).length } peers`)
+    log('Broadcasting to: \n%O', Object.keys(this.peers))
 
     const bytes = JSON.stringify(data)
 
-    // Broadcast as a client
     for (let [address, peer] of Object.entries(this.peers)) {
       if (peer.readyState == peer.OPEN) {
         peer.send(bytes)
       }
     }
-  }
 
-  sendMaster(data) {
-    // find the masterNode
-    const masterNode = Object.entries(this.peers)
-      .filter(([id, peer]) => peer.isMaster)
-      .map(([id, peer]) => peer)[0]
-
-    if (masterNode) {
-      log(`sending ${data.type} to master`)
-      masterNode.send(JSON.stringify(data))
+    for (let [address, peer] of Object.entries(this.clients)) {
+      if (peer.readyState == peer.OPEN && peer.observer) {
+        peer.send(bytes)
+      }
     }
-    else
-      log(`sending ${data.type} failed: masterNode unreachable`)
   }
 
   // Socket on connect
   async socketHandler(ctx, next) {
-    log('socket connection')
-
-    // On net client connection
-    // Force sync the new chain
-    // TODO: share peers
     ctx.websocket.send(JSON.stringify({
-      type: 'id',
+      type: 'info',
       data: {
-        id: this.peer.id.publicKey.toString('hex'),
-        master: !!process.env.MASTER,
-        chain: this.peer.blockchain.chain
+        state: this.peer.state,
+        key: this.peer.id.publicKey
       }
     }))
-
     // On message
     ctx.websocket.on('message', data => {
       try {
         const msg = JSON.parse(data)
         this.handlePeerMsg(ctx.websocket, msg)
       } catch (err) {
-        log(`[${ctx.websocket.id}] invalid msg: ${err}`)
-        console.log(data)
+        console.log(err)
+        if (ctx.websocket.log)
+          ctx.websocket.log('Error: ' + err.message + '\n%O', data)
+        else
+          log('Error: ' + err.message + '\n%O', data)
       }
     })
 
     ctx.websocket.on('close', () => {
-      log(`[${ctx.websocket.id}] connection closed`)
-      delete this.peers[ctx.websocket.id]
+      if (ctx.websocket.log)
+        ctx.websocket.log('closing connection')
+      else
+        log('closing connection')
+      if (this.peers[ctx.websocket.id]) {
+        this.peer.handlePeerDisconnect(ctx.websocket.id)
+        delete this.peers[ctx.websocket.id]
+      }
     })
   }
 }
