@@ -52,6 +52,7 @@ export class Peer extends EventEmitter {
     this.commitListBlock = new Set()
 
     this.changeViewList = new Set()
+    this.newViewList = new Set()
 
     this.onTransaction = false
     this.isMining = false
@@ -401,6 +402,7 @@ export class Peer extends EventEmitter {
       this.prepareListBlock = new Set()
       this.commitListBlock = new Set()
       this.isMining = false
+      this.stopOperation('block')
       this.applyDemurrage()
       logDebug('mine block with %d peers', this.state.nbNodes)
 
@@ -570,7 +572,7 @@ export class Peer extends EventEmitter {
       this.onTransaction = true
     if (type === 'block')
       this.isMining = true
-    this.timer = setTimeout(this.changeView.bind(this), TIMEOUT)
+    this.timer = setTimeout(this.askChangeView.bind(this), TIMEOUT)
   }
 
   stopOperation(type) {
@@ -581,14 +583,65 @@ export class Peer extends EventEmitter {
     clearTimeout(this.timer)
   }
 
-  changeView() {
+  askChangeView() {
     const changeViewMessage = {
-      view: this.state.view + 1
+      view: this.state.view + 1,
+      n: this.checkpoint.n
     }
+    const sig = this.id.sign(changeViewMessage)
+    this.isChangingView = true
+
+    const msg = {
+      msg: this.changeViewMessage,
+      sig: sig,
+      i: this.i
+    }
+
+    this.emit('view-change', msg)
+
+    return this.handleChangeView(msg)
+  }
+
+  handleChangeView(data) {
+    const msg = data.msg
+    const sig = data.sig
+
+    if (!Identity.verifySig(msg, sig, this.peers[data.i]))
+      throw new Error('wrong change view data signature')
+
+    if (msg.view !== this.state.view + 1 || msg.n !== this.checkpoint.n)
+      throw new Error('incorrect data in change view message')
+
+    this.changeViewList.add(this.peers[data.i])
+
+    const changeViewSize = this.changeViewList.size
+    const MinNonFaulty = (2 / 3) * this.state.nbNodes
+
+    if (changeViewSize >= MinNonFaulty) {
+
+      const msg = {
+        n: this.checkpoint.n,
+        i: this.i
+      }
+
+      const sig = this.id.sign(msg)
+
+      this.emit('new-view', msg)
+
+      this.handleNewView(msg)
+    }
+  }
+
+  handleNewView(data) {
+    return
   }
 
   getBalance(key) {
     return this.state.accounts[key] || 0
+  }
+
+  isMasterPeer() {
+    return this.i === this.state.view % this.state.nbNodes
   }
 
 }
