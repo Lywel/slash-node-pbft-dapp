@@ -178,10 +178,17 @@ export class NetworkNode {
       )
     }
     case 'request':
-    {
       this.clients[req.data.msg.client] = ws
-      return this.peer.handleRequest(req.data)
-    }
+      if (!this.peer.isMasterPeer()) {
+        return this.broadcast({
+          type: 'peer-request',
+          data: req.data
+        })
+      }
+    case 'peer-request':
+      if (this.peer.isMasterPeer())
+        return this.peer.handleRequest(req.data)
+      break
     case 'synchronized':
       return this.peer.handleSynchronized()
     case 'pre-prepare':
