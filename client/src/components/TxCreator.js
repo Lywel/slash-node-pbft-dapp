@@ -108,7 +108,7 @@ class TxCreator extends Component {
       const reqTimeout = setTimeout(() => {
         if (this.state.msg)
           this.setState({ txInvalid: true })
-        }, 2000)
+        }, 5000)
 
       this.setState({ reqTimeout })
     }

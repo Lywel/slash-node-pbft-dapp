@@ -63,7 +63,7 @@ class Identity extends Component {
         <h2>Identity</h2>
         <ListGroup>
           <ListGroupItem>Blance{' '}
-            <Badge> { balance } </Badge>
+            <Badge> { Math.floor(balance) } </Badge>
           </ListGroupItem>
           <ListGroupItem>Public{' '}
             <Badge>{ this.props.id.publicKey }</Badge>
