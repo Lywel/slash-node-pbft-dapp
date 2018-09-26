@@ -450,12 +450,12 @@ export class Peer extends EventEmitter {
     setTimeout(this.handleSynchronized.bind(this), TIMEOUT)
 
     return {
-      state: this.state ? Object.assign({}, this.state) : null,
-      blockchain: this.blockchain ? Object.assign({}, this.blockchain) : null,
+      state: this.state,
+      blockchain: this.blockchain,
       pendingTxs: this.pendingTxs,
       transactionQueue: this.transactionQueue,
       peers: this.peers,
-      pendingBlock: this.pendingBlock ? Object.assign({}, this.pendingBlock) : null,
+      pendingBlock: this.pendingBlock,
       pendingBlockSig: this.pendingBlockSig,
       isMining: this.isMining,
     }

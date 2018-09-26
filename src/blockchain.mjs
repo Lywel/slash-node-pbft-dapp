@@ -46,14 +46,17 @@ export class Block {
 }
 
 export class Blockchain {
-  constructor() {
-    const adapter = new FileSync('blockchain.json')
+  constructor(chain) {
+    const adapter = new FileSync(process.env.DB || 'blockchain.json')
     this.db = low(adapter)
 
     this.db.defaults({
       chain: [this.genesisBlock()]
     })
     .write()
+
+    if (chain)
+      this.db.set('chain', chain).write()
   }
 
   get chain() {
@@ -81,8 +84,14 @@ export class Blockchain {
     this.pushBlock(block)
   }
 
+  toJSON() {
+    return {
+      chain: this.chain
+    }
+  }
+
   static fromJSON(json) {
     json.chain = json.chain.map(block => Block.fromJSON(block))
-    return Object.assign(new Blockchain, json)
+    return new Blockchain(json.chain)
   }
 }
