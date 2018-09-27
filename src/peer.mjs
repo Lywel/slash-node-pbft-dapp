@@ -60,6 +60,7 @@ export class Peer extends EventEmitter {
     this.isMining = false
     this.isChangingView = false
     this.timer = null
+    this.minerPid = null
 
     this.pendingBlock = null
     this.pendingBlockSig = null
@@ -329,11 +330,12 @@ export class Peer extends EventEmitter {
     //this.onTransaction = true
     this.startOperation('block')
 
+    /*
     log('i: %d, master peer: %d', this.i, this.state.view % this.state.nbNodes)
     if (this.i !== this.state.view % this.state.nbNodes && this.blockchain.chain.length === 5) {
       logDebug('start faking no response')
       return
-    }
+    } */
 
     this.prepareListBlock = new Set()
 
@@ -374,7 +376,6 @@ export class Peer extends EventEmitter {
     const MinNonFaulty = (2 / 3) * this.state.nbNodes
 
     if (prepareListBlockSize >= MinNonFaulty) {
-      log('EMIT COMMIT WTF: %d >= %d, NbNodes: %d', prepareListBlockSize, MinNonFaulty, this.state.nbNodes)
       this.emit('commit', {
         emitter: this.id.publicKey,
         type: 'block'
@@ -454,6 +455,7 @@ export class Peer extends EventEmitter {
 
   stopMining() {
     clearInterval(this.minerPid)
+    this.minerPid = null
   }
 
 
@@ -468,6 +470,7 @@ export class Peer extends EventEmitter {
     this.ready = false
     this.peers[this.state.nbNodes] = key
 
+    this.stopMining()
     this.state.nbNodes++
     setTimeout(this.handleSynchronized.bind(this), TIMEOUT)
 
@@ -669,7 +672,7 @@ export class Peer extends EventEmitter {
       throw new Error('incorrect data in change view message')
     }
 
-    this.newViewList.add(this.peers[msg.i])
+    this.newViewList.add(this.peers[data.i])
     const newViewListSize = this.newViewList.size
     const maxFaultyNodes = (1 / 3) * this.state.nbNodes
 
