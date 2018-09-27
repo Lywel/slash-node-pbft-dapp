@@ -26,16 +26,17 @@ import { debuglog } from 'util';
 let log = debug('peer')
 let logDebug = debug('debug')
 
-const TIMEOUT = process.env.TIMEOUT || 6000
+const TIMEOUT = process.env.TIMEOUT || 2000
+const BLOCK_INTERVAL = 3000
+const CHECKPOINT_INTERVAL = 3
 
 export class Peer extends EventEmitter {
-  constructor(network) {
+  constructor() {
     super()
-    this.network = network
     this.id = new Identity()
     this.blockchain = new Blockchain()
     this.state = new State()
-    this.checkpoint = null
+    this.checkpoint = new CheckPoint(this.state, 0)
     this.i = 0
 
     this.pendingTxs = []
@@ -51,6 +52,7 @@ export class Peer extends EventEmitter {
     this.prepareListBlock = new Set()
     this.commitListBlock = new Set()
 
+    this.checkpointList = new Set()
     this.changeViewList = new Set()
     this.newViewList = new Set()
 
@@ -61,6 +63,8 @@ export class Peer extends EventEmitter {
 
     this.pendingBlock = null
     this.pendingBlockSig = null
+
+    this.checkpoint = null
 
     this.ready = false
 
@@ -325,6 +329,12 @@ export class Peer extends EventEmitter {
     //this.onTransaction = true
     this.startOperation('block')
 
+    log('i: %d, master peer: %d', this.i, this.state.view % this.state.nbNodes)
+    if (this.i !== this.state.view % this.state.nbNodes && this.blockchain.chain.length === 5) {
+      logDebug('start faking no response')
+      return
+    }
+
     this.prepareListBlock = new Set()
 
     this.emit('prepare', {
@@ -337,6 +347,7 @@ export class Peer extends EventEmitter {
 
   handlePrepareBlock(emitter) {
     log('===> handlePrepareBlock(%o)', emitter)
+
     if (!this.pendingBlock || !this.pendingBlockSig) {
       this.prepareListBlock.add(emitter)
       return logDebug('prepare received but there is no pending block')
@@ -350,10 +361,9 @@ export class Peer extends EventEmitter {
       console.dir(this.buildNextBlock(), { color: true, depth: 3 })
       console.log('blockchain len:', this.blockchain.chain.length)
 
-
       this.pendingBlock = null
       this.pendingBlockSig = null
-      this.stopOperation('block')
+      //this.stopOperation('block')
       throw new Error('Block verification failed: hashs don\'t match')
     }
 
@@ -364,6 +374,7 @@ export class Peer extends EventEmitter {
     const MinNonFaulty = (2 / 3) * this.state.nbNodes
 
     if (prepareListBlockSize >= MinNonFaulty) {
+      log('EMIT COMMIT WTF: %d >= %d, NbNodes: %d', prepareListBlockSize, MinNonFaulty, this.state.nbNodes)
       this.emit('commit', {
         emitter: this.id.publicKey,
         type: 'block'
@@ -392,8 +403,7 @@ export class Peer extends EventEmitter {
       logDebug(this.peers)
       logDebug('peer state:')
       logDebug(this.state)
-      logDebug('pending block state hash:')
-      logDebug(this.pendingBlock.stateHash)
+      logDebug('pending block state hash: %s', this.pendingBlock.stateHash)
       log('⛏️  Block #%d validated', this.pendingBlock.index)
 
       this.pendingTxs = []
@@ -406,9 +416,9 @@ export class Peer extends EventEmitter {
       this.applyDemurrage()
       logDebug('mine block with %d peers', this.state.nbNodes)
 
-      if (this.blockchain.chain.length % 100 === 0) {
+      if (this.blockchain.chain.length % CHECKPOINT_INTERVAL === 0) {
+        log('checkpoint produced')
         this.checkpoint = new CheckPoint(this.state, this.blockchain.chain.length)
-        log('checkpoint %d produced', this.blockchain.chain.length)
       }
       return this.handleNextTransaction()
     }
@@ -438,7 +448,7 @@ export class Peer extends EventEmitter {
   }
 
   startMining() {
-    this.minerPid = setInterval(() => this.mine(), 10000)
+    this.minerPid = setInterval(() => this.mine(), BLOCK_INTERVAL)
     logDebug('START MINING')
   }
 
@@ -467,9 +477,10 @@ export class Peer extends EventEmitter {
       pendingTxs: this.pendingTxs,
       transactionQueue: this.transactionQueue,
       peers: this.peers,
+      checkpoint: this.checkpoint,
       pendingBlock: this.pendingBlock,
       pendingBlockSig: this.pendingBlockSig,
-      isMining: this.isMining,
+      isMining: this.isMining
     }
   }
 
@@ -494,6 +505,7 @@ export class Peer extends EventEmitter {
       this.pendingTxs = stateCandidate.data.pendingTxs
       this.transactionQueue = stateCandidate.data.transactionQueue
       this.peers = stateCandidate.data.peers
+      this.checkpoint = stateCandidate.data.checkpoint
       if (!stateCandidate.data.pendingBlock)
         this.pendingBlock = null
       else
@@ -591,26 +603,36 @@ export class Peer extends EventEmitter {
     const sig = this.id.sign(changeViewMessage)
     this.isChangingView = true
 
-    const msg = {
-      msg: this.changeViewMessage,
+    const data = {
+      msg: changeViewMessage,
       sig: sig,
       i: this.i
     }
 
-    this.emit('view-change', msg)
+    this.dieTimeout = setTimeout(this.emit.bind(this), 2 * TIMEOUT, 'suicide')
 
-    return this.handleChangeView(msg)
+    log('trigger change-view')
+    this.emit('view-change', data)
+
+    return this.handleViewChange(data)
   }
 
-  handleChangeView(data) {
+  handleViewChange(data) {
     const msg = data.msg
     const sig = data.sig
 
     if (!Identity.verifySig(msg, sig, this.peers[data.i]))
+    {
+      logDebug('msg: %O', msg)
+      logDebug('sig: %s', sig)
+      logDebug('peer: %d', this.peers[data.i])
       throw new Error('wrong change view data signature')
+    }
 
     if (msg.view !== this.state.view + 1 || msg.n !== this.checkpoint.n)
       throw new Error('incorrect data in change view message')
+
+    log('change-view received')
 
     this.changeViewList.add(this.peers[data.i])
 
@@ -619,21 +641,76 @@ export class Peer extends EventEmitter {
 
     if (changeViewSize >= MinNonFaulty) {
 
-      const msg = {
-        n: this.checkpoint.n,
+      const newData = {
+        msg: msg,
+        sig: this.id.sign(msg),
         i: this.i
       }
+      this.isChangingView = true
+      this.emit('new-view', newData)
 
-      const sig = this.id.sign(msg)
-
-      this.emit('new-view', msg)
-
-      this.handleNewView(msg)
+      return this.handleNewView(newData)
     }
   }
 
   handleNewView(data) {
-    return
+    if (!this.isChangingView)
+      return
+
+    const msg = data.msg
+    const sig = data.sig
+
+    if (!Identity.verifySig(msg, sig, this.peers[data.i]))
+      throw new Error('wrong new view data signature')
+
+    if (msg.view !== this.state.view + 1 || msg.n !== this.checkpoint.n) {
+      logDebug('msg view: %d, state view + 1: %d', msg.view, this.state.view + 1)
+      logDebug('msg n: %d, checkpoint n: %d', msg.n, this.checkpoint.n)
+      throw new Error('incorrect data in change view message')
+    }
+
+    this.newViewList.add(this.peers[msg.i])
+    const newViewListSize = this.newViewList.size
+    const maxFaultyNodes = (1 / 3) * this.state.nbNodes
+
+    if (newViewListSize > maxFaultyNodes) {
+      log('changing view...')
+      this.state = this.checkpoint.state
+      this.state.view++
+      let chain = this.blockchain.chain.slice(0, this.checkpoint.n)
+      console.log(this.checkpoint.n)
+      console.log(chain)
+      this.blockchain = new Blockchain(chain)
+
+      this.pendingTxs = []
+      this.transactionQueue = []
+
+      this.receivedStatesHash = []
+      this.receivedKeys = new Set()
+
+      this.transactionDic = []
+
+      this.prepareListBlock = new Set()
+      this.commitListBlock = new Set()
+
+      this.checkpointList = new Set()
+      this.changeViewList = new Set()
+      this.newViewList = new Set()
+
+      this.onTransaction = false
+      this.isMining = false
+      this.isChangingView = false
+
+      this.pendingBlock = null
+      this.pendingBlockSig = null
+      clearTimeout(this.dieTimeout)
+
+      this.stopMining()
+      if (this.i === this.state.view % this.state.nbNodes)
+        this.startMining()
+
+      this.isChangingView = false
+    }
   }
 
   getBalance(key) {
@@ -643,5 +720,11 @@ export class Peer extends EventEmitter {
   isMasterPeer() {
     return this.i === this.state.view % this.state.nbNodes
   }
+
+  suicide() {
+    this.emit('suicide')
+  }
+
+
 
 }

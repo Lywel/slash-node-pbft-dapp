@@ -38,6 +38,8 @@ export class NetworkNode {
     this.peer.on('prepare', this.peerEventHandler('prepare'))
     this.peer.on('commit', this.peerEventHandler('commit'))
     this.peer.on('synchronized', this.peerEventHandler('synchronized'))
+    this.peer.on('view-change', this.peerEventHandler('view-change'))
+    this.peer.on('new-view', this.peerEventHandler('new-view'))
     this.peer.on('reply', data => {
       const { client } = data.result
       if (this.clients[client]) {
@@ -197,6 +199,10 @@ export class NetworkNode {
       return this.peer.handlePrepare(req.data)
     case 'commit':
       return this.peer.handleCommit(req.data)
+    case 'view-change':
+      return this.peer.handleViewChange(req.data)
+    case 'new-view':
+      return this.peer.handleNewView(req.data)
     case 'info':
       // Peers dont care about infos
       break
