@@ -34,6 +34,7 @@ export class NetworkNode {
     this.clients = []
 
     this.peerEventHandler = this.peerEventHandler.bind(this)
+    this.peer.on('sucide', this.sucide.bind(this))
     this.peer.on('pre-prepare', this.peerEventHandler('pre-prepare'))
     this.peer.on('prepare', this.peerEventHandler('prepare'))
     this.peer.on('commit', this.peerEventHandler('commit'))
@@ -52,6 +53,11 @@ export class NetworkNode {
       } else
         log('client %s is not reachable', client)
     })
+  }
+
+  sucide() {
+    this.stop()
+    this.start()
   }
 
   peerEventHandler(type) {
